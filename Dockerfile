@@ -2,7 +2,9 @@
 # Imagem da API (SSE em /v1/chat). Estágio 1 resolve dependências com uv; o estágio final
 # leva só o venv e os dados, roda sem root e já traz o banco gerado por `make ingest`.
 
-FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
+# Bases fixadas por digest do índice multi-arch (obtido via HEAD no registry, sem baixar a imagem).
+# Para atualizar: troque o digest após revisar a nova versão da tag.
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim@sha256:e5b65587bce7de595f299855d7385fe7fca39b8a74baa261ba1b7147afa78e58 AS builder
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never
 WORKDIR /app
 
@@ -17,7 +19,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-editable
 
 
-FROM python:3.12-slim AS runtime
+FROM python:3.12-slim@sha256:4840d514c583a4d3d8cad3940e68dee6f0f6f3635c12fcd0a3d74c21a5b93a54 AS runtime
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1

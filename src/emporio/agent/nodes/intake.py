@@ -18,20 +18,29 @@ from emporio.guardrails.input import REFUSAL, looks_like_injection, normalize
 log = logging.getLogger("emporio.guard")
 
 
-def input_guard(state: ChatState, config: RunnableConfig) -> dict[str, Any]:
-    """Normaliza a mensagem, tira a PII, barra injeção óbvia e zera o que é do turno."""
-    text = normalize(inbound_text(config))
-    safe = redact(text)
-    updates: dict[str, Any] = {
-        **TURN_RESET,
-        "user_text": safe,
-        "messages": [{"role": "user", "content": safe}],
-        "turn": state.get("turn", 0) + 1,
-    }
-    if looks_like_injection(text):
-        log.warning("injecao detectada na sessao %s: %s", state.get("session_id"), safe[:80])
-        updates.update(answer=REFUSAL, blocked=True)
-    return updates
+def make_input_guard(deps: Deps) -> Any:
+    """Nó ``input_guard``: expira a verificação vencida e prepara o turno."""
+
+    def input_guard(state: ChatState, config: RunnableConfig) -> dict[str, Any]:
+        """Normaliza a mensagem, tira a PII, barra injeção óbvia e zera o que é do turno."""
+        text = normalize(inbound_text(config))
+        safe = redact(text)
+        updates: dict[str, Any] = {
+            **TURN_RESET,
+            "user_text": safe,
+            "messages": [{"role": "user", "content": safe}],
+            "turn": state.get("turn", 0) + 1,
+        }
+        if state.get("verified_customer_id") is not None:
+            age = deps.wall() - state.get("verified_at", 0.0)
+            if age >= deps.verify_policy.ttl_seconds:  # sem verified_at (legado) = expirada
+                updates.update(verified_customer_id=None, verified_first_name="", verified_at=0.0)
+        if looks_like_injection(text):
+            log.warning("injecao detectada na sessao %s: %s", state.get("session_id"), safe[:80])
+            updates.update(answer=REFUSAL, blocked=True)
+        return updates
+
+    return input_guard
 
 
 _SHORT_REPLY = 6

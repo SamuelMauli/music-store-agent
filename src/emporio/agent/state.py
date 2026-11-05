@@ -12,7 +12,7 @@ class ChatState(TypedDict, total=False):
     """Estado de uma conversa (``thread_id`` = sessão).
 
     Persiste entre turnos: ``messages``, ``summary``, ``summarized_upto``, ``pending``,
-    ``verified_customer_id``, ``verified_first_name``, ``verification_attempts``,
+    ``verified_customer_id``, ``verified_first_name``, ``verified_at``, ``verification_attempts``,
     ``last_products``, ``turn``. O resto é do turno e é zerado no ``input_guard``.
     """
 
@@ -23,6 +23,7 @@ class ChatState(TypedDict, total=False):
     pending: dict[str, Any]
     verified_customer_id: int | None
     verified_first_name: str
+    verified_at: float
     verification_attempts: int
     last_products: list[dict[str, Any]]
     turn: int

@@ -104,3 +104,25 @@ def test_rate_limiter_window() -> None:
     limiter.check("b")
     now[0] = 11.0
     limiter.check("a")
+
+
+def test_rate_limiter_drops_idle_keys_and_caps_memory() -> None:
+    now = [0.0]
+    limiter = SlidingWindowLimiter(2, 10.0, monotonic=lambda: now[0], max_keys=5)
+    for n in range(20):
+        limiter.check(f"k{n}")
+    assert len(limiter) <= 5  # teto de chaves
+    now[0] = 25.0
+    limiter.check("novo")  # varredura: as ociosas saem
+    assert len(limiter) == 1
+
+
+def test_rate_limiter_does_not_leave_empty_deques_for_rejected_keys() -> None:
+    now = [0.0]
+    limiter = SlidingWindowLimiter(1, 10.0, monotonic=lambda: now[0])
+    limiter.check("a")
+    with pytest.raises(RateLimitedError):
+        limiter.check("a")
+    now[0] = 11.0
+    limiter.check("a")
+    assert len(limiter) == 1

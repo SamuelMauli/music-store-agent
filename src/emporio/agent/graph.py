@@ -13,7 +13,7 @@ from langgraph.graph.state import CompiledStateGraph
 from emporio.agent.nodes.deps import Deps
 from emporio.agent.nodes.finish import make_handoff, respond
 from emporio.agent.nodes.guard import make_output_guard
-from emporio.agent.nodes.intake import input_guard, make_router, scope_node
+from emporio.agent.nodes.intake import make_input_guard, make_router, scope_node
 from emporio.agent.nodes.memory import make_summarizer
 from emporio.agent.nodes.react import make_agent
 from emporio.agent.nodes.verify import make_verification
@@ -82,7 +82,7 @@ def build_graph(
         Grafo compilado, pronto para ``invoke``/``stream``.
     """
     graph = StateGraph(ChatState)
-    graph.add_node("input_guard", _traced("input_guard", input_guard, telemetry))
+    graph.add_node("input_guard", _traced("input_guard", make_input_guard(deps), telemetry))
     graph.add_node("router", _traced("router", make_router(deps), telemetry))
     graph.add_node("scope_gate", _traced("scope_gate", scope_node, telemetry))
     graph.add_node("verification", _traced("verification", make_verification(deps), telemetry))

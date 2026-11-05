@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 import threading
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -24,10 +25,11 @@ from emporio.adapters.retrieval import retriever_factory
 from emporio.agent.graph import build_graph
 from emporio.agent.llm import factory
 from emporio.agent.llm.types import LLMProvider
-from emporio.agent.nodes.deps import Deps
+from emporio.agent.nodes.deps import Deps, VerifyPolicy
 from emporio.agent.service import ChatService
 from emporio.agent.tools import ToolRegistry, build_registry
 from emporio.clock import FixedClock, SystemClock
+from emporio.guardrails.attempts import InMemoryAttemptStore
 from emporio.guardrails.rate_limit import SlidingWindowLimiter
 from emporio.observability import Telemetry, build_telemetry
 from emporio.observability.tracing_llm import TracingLLM
@@ -61,6 +63,7 @@ def build_container(
     checkpointer: BaseCheckpointSaver[Any] | None = None,
     tickets: TicketRepository | None = None,
     telemetry: Telemetry | None = None,
+    wall: Callable[[], float] | None = None,
 ) -> Container:
     """Monta o serviço de conversa.
 
@@ -70,6 +73,7 @@ def build_container(
         clock: Relógio; default é o fixo de ``reference_datetime`` ou o do sistema.
         checkpointer: Memória por sessão; default é SQLite em ``checkpoint_path``.
         tickets: Repositório de chamados; default é SQLite em ``tickets_path``.
+        wall: Relógio de parede (epoch) da validade da verificação; default ``time.time``.
         telemetry: Tracing; default vem de ``settings.otel_exporter`` (``none`` = no-op).
 
     Returns:
@@ -113,9 +117,27 @@ def build_container(
         memory = sqlite3.connect(str(settings.checkpoint_path), check_same_thread=False)
         closers.append(memory.close)
         checkpointer = SqliteSaver(memory)
-    graph = build_graph(Deps(llm, registry, retriever, use_clock), checkpointer, telemetry)
+    deps = Deps(
+        llm,
+        registry,
+        retriever,
+        use_clock,
+        attempts=InMemoryAttemptStore(settings.verify_lockout_seconds),
+        wall=wall or time.time,
+        verify_policy=VerifyPolicy(
+            ttl_seconds=settings.verification_ttl_seconds,
+            max_per_target=settings.verify_max_attempts_per_target,
+            max_per_ip=settings.verify_max_attempts_per_ip,
+        ),
+    )
+    graph = build_graph(deps, checkpointer, telemetry)
     return Container(
-        ChatService(graph, SlidingWindowLimiter(settings.rate_limit_per_minute, 60.0), telemetry),
+        ChatService(
+            graph,
+            SlidingWindowLimiter(settings.rate_limit_per_minute, 60.0),
+            SlidingWindowLimiter(settings.rate_limit_per_ip_per_minute, 60.0),
+            telemetry,
+        ),
         telemetry,
         registry,
         connection,

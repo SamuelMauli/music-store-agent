@@ -1,0 +1,19 @@
+# Falsos positivos: o campo "key" do cassete é o hash SHA-256 do pedido (evals/cassette.py), não credencial.
+29bfb36cd3d91b061fc8ed10a6064c455fbdba89:evals/cassettes/live.jsonl:generic-api-key:7
+29bfb36cd3d91b061fc8ed10a6064c455fbdba89:evals/cassettes/live.jsonl:generic-api-key:8
+29bfb36cd3d91b061fc8ed10a6064c455fbdba89:evals/cassettes/live.jsonl:generic-api-key:11
+29bfb36cd3d91b061fc8ed10a6064c455fbdba89:evals/cassettes/live.jsonl:generic-api-key:14
+29bfb36cd3d91b061fc8ed10a6064c455fbdba89:evals/cassettes/live.jsonl:generic-api-key:17
+29bfb36cd3d91b061fc8ed10a6064c455fbdba89:evals/cassettes/live.jsonl:generic-api-key:18
+29bfb36cd3d91b061fc8ed10a6064c455fbdba89:evals/cassettes/live.jsonl:generic-api-key:21
+29bfb36cd3d91b061fc8ed10a6064c455fbdba89:evals/cassettes/live.jsonl:generic-api-key:26
+29bfb36cd3d91b061fc8ed10a6064c455fbdba89:evals/cassettes/live.jsonl:generic-api-key:27
+29bfb36cd3d91b061fc8ed10a6064c455fbdba89:evals/cassettes/live.jsonl:generic-api-key:31
+29bfb36cd3d91b061fc8ed10a6064c455fbdba89:evals/cassettes/live.jsonl:generic-api-key:32
+29bfb36cd3d91b061fc8ed10a6064c455fbdba89:evals/cassettes/live.jsonl:generic-api-key:38
+29bfb36cd3d91b061fc8ed10a6064c455fbdba89:evals/cassettes/live.jsonl:generic-api-key:39
+29bfb36cd3d91b061fc8ed10a6064c455fbdba89:evals/cassettes/live.jsonl:generic-api-key:45
+29bfb36cd3d91b061fc8ed10a6064c455fbdba89:evals/cassettes/live.jsonl:generic-api-key:47
+29bfb36cd3d91b061fc8ed10a6064c455fbdba89:evals/cassettes/live.jsonl:generic-api-key:48
+29bfb36cd3d91b061fc8ed10a6064c455fbdba89:evals/cassettes/live.jsonl:generic-api-key:49
+29bfb36cd3d91b061fc8ed10a6064c455fbdba89:evals/cassettes/live.jsonl:generic-api-key:50

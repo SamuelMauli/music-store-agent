@@ -37,6 +37,15 @@ class Settings(BaseSettings):
         checkpoint_path: SQLite com a memória por sessão (checkpointer do LangGraph).
         tickets_path: SQLite dos chamados (somente anexação).
         rate_limit_per_minute: Mensagens por sessão por minuto (CLI e API).
+        rate_limit_per_ip_per_minute: Mensagens por IP de cliente por minuto (API).
+        trusted_proxy_hops: Proxies confiáveis na frente da API; com N>0 o IP do cliente é o
+            N-ésimo da direita em ``X-Forwarded-For`` (0 = ignora o cabeçalho).
+        session_secret: Segredo HMAC dos ids de sessão da API (``EMPORIO_SESSION_SECRET``);
+            ausente, gera um aleatório por processo (sessões não sobrevivem a restart).
+        verification_ttl_seconds: Validade da verificação de cliente na sessão.
+        verify_max_attempts_per_target: Falhas por pedido e por contato antes do bloqueio.
+        verify_max_attempts_per_ip: Falhas de verificação por IP antes do bloqueio.
+        verify_lockout_seconds: Duração do bloqueio por alvo/IP (TTL das falhas).
         use_system_clock: Usa o relógio real em vez de ``reference_datetime``.
         llm_provider: ``openai_compatible`` (Groq, Ollama, OpenAI...) ou ``fake`` (offline).
         llm_base_url: Endpoint OpenAI-compatível.
@@ -70,6 +79,13 @@ class Settings(BaseSettings):
     tickets_path: Path = Path("data/tickets.sqlite")
     use_system_clock: bool = False
     rate_limit_per_minute: int = 20
+    rate_limit_per_ip_per_minute: int = 60
+    trusted_proxy_hops: int = 0
+    session_secret: SecretStr | None = None
+    verification_ttl_seconds: int = 900
+    verify_max_attempts_per_target: int = 5
+    verify_max_attempts_per_ip: int = 10
+    verify_lockout_seconds: int = 900
     llm_provider: Literal["openai_compatible", "fake"] = "openai_compatible"
     llm_base_url: str = "https://api.groq.com/openai/v1"
     llm_api_key: SecretStr | None = None

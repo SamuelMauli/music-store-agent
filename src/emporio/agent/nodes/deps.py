@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+import time
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from typing import Any, Final
 
 from langchain_core.runnables import RunnableConfig
@@ -14,11 +16,21 @@ from emporio.agent.router import Router
 from emporio.agent.state import ChatState
 from emporio.agent.tools import ToolContext, ToolExecution, ToolRegistry
 from emporio.domain.pii import mask_pii
+from emporio.guardrails.attempts import AttemptStore, InMemoryAttemptStore
 from emporio.ports import Clock, PolicyRetriever
 
 MAX_TOOL_CALLS: Final = 4
 HISTORY_WINDOW: Final = 12
 TECH_FAILURE: Final = "Tive um problema técnico agora e não consegui concluir por aqui."
+
+
+@dataclass(frozen=True, slots=True)
+class VerifyPolicy:
+    """Limites e validade da verificação de cliente."""
+
+    ttl_seconds: float = 900.0
+    max_per_target: int = 5
+    max_per_ip: int = 10
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,6 +41,9 @@ class Deps:
     registry: ToolRegistry
     retriever: PolicyRetriever
     clock: Clock
+    attempts: AttemptStore = field(default_factory=InMemoryAttemptStore)
+    verify_policy: VerifyPolicy = field(default_factory=VerifyPolicy)
+    wall: Callable[[], float] = time.time
 
     @property
     def router(self) -> Router:
@@ -40,6 +55,12 @@ def inbound_text(config: RunnableConfig) -> str:
     """Mensagem crua do turno, passada fora do estado para não ir ao checkpoint."""
     inbound = (config.get("configurable") or {}).get("inbound") or {}
     return str(inbound.get("text", ""))
+
+
+def inbound_ip(config: RunnableConfig) -> str:
+    """IP do cliente do turno (vazio no CLI), passado fora do estado."""
+    inbound = (config.get("configurable") or {}).get("inbound") or {}
+    return str(inbound.get("ip", ""))
 
 
 def tool_context(state: ChatState) -> ToolContext:

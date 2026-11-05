@@ -1,4 +1,7 @@
-"""Nó ``verification``: pedido + e-mail ou telefone, com no máximo 3 tentativas."""
+"""Nó ``verification``: pedido + e-mail ou telefone.
+
+Limites de falha: 3 por sessão (estado) e, em store com TTL, por pedido, por contato e por IP.
+"""
 
 from __future__ import annotations
 
@@ -9,8 +12,16 @@ from langchain_core.runnables import RunnableConfig
 
 from emporio.agent.identity import Identity, extract_identity
 from emporio.agent.intents import VERIFICATION_INTENTS, RouteDecision
-from emporio.agent.nodes.deps import Deps, inbound_text, route_of, tool_context, trace_of
+from emporio.agent.nodes.deps import (
+    Deps,
+    inbound_ip,
+    inbound_text,
+    route_of,
+    tool_context,
+    trace_of,
+)
 from emporio.agent.state import ChatState
+from emporio.guardrails.attempts import hashed
 
 MAX_ATTEMPTS: Final = 3
 ASK_BOTH: Final = (
@@ -26,6 +37,15 @@ RETRY: Final = (
     "Não consegui confirmar com esses dados. Confere o número do pedido e o e-mail ou "
     "telefone do cadastro e me manda de novo?"
 )
+
+
+def _blocked(updates: dict[str, Any]) -> dict[str, Any]:
+    return {
+        **updates,
+        "answer": "Não consegui confirmar seus dados por aqui.",
+        "handoff": True,
+        "handoff_reason": "verificação de cliente falhou",
+    }
 
 
 def _missing_text(order_id: int | None, identity: Identity) -> str:
@@ -59,6 +79,15 @@ def _ask(state: ChatState, route: RouteDecision, text: str) -> dict[str, Any]:
     return {**base, "route": rest.model_dump(mode="json"), "scope_notes": notes}
 
 
+def _keys(order_id: int, identity: Identity, ip: str) -> tuple[list[str], list[str]]:
+    """Chaves (alvo, ip) do store de tentativas; contato entra só como hash."""
+    contact = (identity.email or "").lower() or "".join(
+        c for c in identity.phone or "" if c.isdigit()
+    )
+    targets = [f"order:{order_id}", hashed("contact", contact)]
+    return targets, [f"ip:{ip}"] if ip else []
+
+
 def make_verification(deps: Deps) -> Any:
     """Nó ``verification``: libera dados de pedido só depois de confirmar o dono."""
 
@@ -70,6 +99,13 @@ def make_verification(deps: Deps) -> Any:
         order_id = identity.order_id or route.entities.order_id
         if order_id is None or not identity.has_contact:
             return _ask(state, route, _missing_text(order_id, identity))
+        policy = deps.verify_policy
+        targets, ips = _keys(order_id, identity, inbound_ip(config))
+        locked = any(deps.attempts.count(k) >= policy.max_per_target for k in targets) or any(
+            deps.attempts.count(k) >= policy.max_per_ip for k in ips
+        )
+        if locked:
+            return _blocked({"tool_traces": state.get("tool_traces", [])})
         args: dict[str, Any] = {"order_id": order_id}
         args.update({"email": identity.email} if identity.email else {"phone": identity.phone})
         execution = deps.registry.call("verify_customer", args, tool_context(state))
@@ -83,18 +119,16 @@ def make_verification(deps: Deps) -> Any:
                 "tool_traces": traces,
                 "verified_customer_id": execution.state_updates["verified_customer_id"],
                 "verified_first_name": data.get("first_name") or "",
+                "verified_at": deps.wall(),
                 "route": route.model_copy(update={"entities": entities}).model_dump(mode="json"),
             }
         attempts += 1
+        for key in (*targets, *ips):
+            deps.attempts.register(key)
         blocked = payload["status"] == "policy_blocked" or attempts >= MAX_ATTEMPTS
         updates: dict[str, Any] = {"tool_traces": traces, "verification_attempts": attempts}
         if blocked:
-            return {
-                **updates,
-                "answer": "Não consegui confirmar seus dados por aqui.",
-                "handoff": True,
-                "handoff_reason": "verificação de cliente falhou",
-            }
+            return _blocked(updates)
         return {**updates, **_ask(state, route, RETRY)}
 
     return verification
