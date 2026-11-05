@@ -9,6 +9,7 @@ authors = [
 requires-python = ">=3.12"
 dependencies = [
     "duckdb>=2.0.0",
+    "pdfplumber>=0.11.10",
     "pydantic>=2.14.3",
     "pydantic-settings>=2.16.2",
     "pyyaml>=6.0.3",
@@ -37,7 +38,7 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "SIM", "C4", "C90", "RUF", "PT", "N", "S", "DTZ", "PL"]
-ignore = ["PLR2004", "PLR0913"]
+ignore = ["PLR2004", "PLR0913", "RUF001", "RUF002"]  # "›" é o separador de breadcrumb
 
 [tool.ruff.lint.mccabe]
 max-complexity = 10

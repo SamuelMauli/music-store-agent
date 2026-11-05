@@ -115,7 +115,7 @@ def append_rows(path: Path, *lines: str) -> None:
 
 def dirty_raw(tmp_path: Path) -> Path:
     raw = tmp_path / "raw"
-    shutil.copytree(ROOT / "data" / "raw", raw, ignore=shutil.ignore_patterns("*.pdf"))
+    shutil.copytree(ROOT / "data" / "raw", raw)
     append_rows(
         raw / "products.csv",
         '500,0,Preço zero,5,desc,1,active,"{}",2024-01-01',

@@ -30,6 +30,11 @@ def main() -> int:
             f"  {table:<12} bronze={count:>3}  silver={silver.accepted:>3}  "
             f"quarentena={silver.quarantined}"
         )
+    policies = result.policies
+    print(
+        f"  {'policies':<12} manual v{policies.manual_version}: {policies.sections} seções "
+        f"(sha256 {policies.corpus_sha256[:12]})"
+    )
     print(format_quality_report(result.quality))
     print(f"relatório: {settings.quality_report_path}")
     return 0

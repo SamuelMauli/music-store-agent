@@ -6,10 +6,12 @@ from emporio.adapters.persistence.duckdb_repositories import (
     DuckDbProductRepository,
     DuckDbPromotionRepository,
 )
+from emporio.adapters.persistence.policy_repository import DuckDbPolicySectionRepository
 
 __all__ = [
     "DuckDbCustomerRepository",
     "DuckDbOrderRepository",
+    "DuckDbPolicySectionRepository",
     "DuckDbProductRepository",
     "DuckDbPromotionRepository",
 ]

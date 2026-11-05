@@ -11,6 +11,7 @@ from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _STORE_TZ = "America/Campo_Grande"
+POLICY_PDF_NAME = "politicas_da_loja.pdf"
 
 
 class Settings(BaseSettings):
@@ -36,6 +37,11 @@ class Settings(BaseSettings):
     timezone: str = _STORE_TZ
     metro_cities: list[str] = ["Campo Grande"]
     reference_datetime: datetime = datetime(2026, 3, 25, 10, 0, tzinfo=ZoneInfo(_STORE_TZ))
+
+    @property
+    def policy_pdf(self) -> Path:
+        """PDF do manual de políticas, dentro de ``raw_dir``."""
+        return self.raw_dir / POLICY_PDF_NAME
 
     @model_validator(mode="after")
     def _localize_reference(self) -> Self:

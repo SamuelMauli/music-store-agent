@@ -9,6 +9,7 @@ import duckdb
 
 from emporio.ingestion.bronze import load_bronze
 from emporio.ingestion.gold import build_gold
+from emporio.ingestion.policy_load import PolicyLoadResult, load_policy_sections
 from emporio.ingestion.quality import build_quality_report, write_quality_report
 from emporio.ingestion.silver import TableResult, build_silver
 from emporio.ports import Clock
@@ -23,11 +24,13 @@ class IngestionResult:
         bronze: Linhas carregadas por tabela na bronze.
         silver: Aceitas e quarentenadas por tabela na silver.
         quality: Relatório de qualidade (regras D1 a D14).
+        policies: Seções do manual gravadas, com hash do corpus.
     """
 
     bronze: dict[str, int]
     silver: dict[str, TableResult]
     quality: dict[str, Any]
+    policies: PolicyLoadResult
 
 
 def run_pipeline(settings: Settings, clock: Clock) -> IngestionResult:
@@ -49,8 +52,9 @@ def run_pipeline(settings: Settings, clock: Clock) -> IngestionResult:
         bronze = load_bronze(con, settings.raw_dir, clock.now())
         silver = build_silver(con, settings.contracts_dir)
         build_gold(con)
+        policies = load_policy_sections(con, settings.policy_pdf)
         quality = build_quality_report(con, settings.reference_datetime.date())
     finally:
         con.close()
     write_quality_report(quality, settings.quality_report_path)
-    return IngestionResult(bronze=bronze, silver=silver, quality=quality)
+    return IngestionResult(bronze=bronze, silver=silver, quality=quality, policies=policies)
