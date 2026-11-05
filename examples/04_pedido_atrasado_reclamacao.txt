@@ -1,0 +1,29 @@
+Pedido atrasado e reclamação: chamado legítimo
+Data de referência: 25/03/2026 10:00 (America/Campo_Grande)
+Modelo: openai/gpt-oss-20b (resposta), openai/gpt-oss-20b (roteador)
+Provider: api.groq.com
+------------------------------------------------------------------------
+Cliente: Onde está meu pedido 8?
+Tom: Oi! Eu sou o Tom, assistente virtual da Empório da Música, e você pode pedir um atendente humano quando quiser. Obrigado! Agora preciso do e-mail ou do telefone cadastrado na compra, para confirmar que o pedido é seu.
+
+Cliente: a***@coldmail.com
+Tom: Seu pedido 8 está enviado, em trânsito. 
+Código de rastreamento: BRJL5544332BR. 
+Estimativa de entrega: 28/02/2026. 
+Está atrasado há 25 dias em relação à previsão. 
+
+Posso ajudar em mais alguma coisa?
+
+Cliente: Isso é um absurdo, já passou do prazo. Quero reclamar e falar com alguém.
+Tom: Desculpe pelo transtorno, Ana. 
+Seu protocolo é EMP-20260325-0001. 
+A equipe vai responder em até 24 horas úteis. 
+
+Se preferir falar direto com um atendente humano, é só me avisar. 
+Posso ajudar em mais alguma coisa?
+
+------------------------------------------------------------------------
+Tools chamadas por turno: - | verify_customer, get_order_status | open_ticket
+Latência por turno: 624 ms | 1473 ms | 9073 ms
+Tokens: 12087 entrada, 852 saída
+Custo estimado: US$ 0.002088

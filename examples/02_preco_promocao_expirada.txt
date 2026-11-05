@@ -1,0 +1,21 @@
+Promoção expirada: preço cheio, PIX e produto sem estoque
+Data de referência: 25/03/2026 10:00 (America/Campo_Grande)
+Modelo: openai/gpt-oss-20b (resposta), openai/gpt-oss-20b (roteador)
+Provider: api.groq.com
+------------------------------------------------------------------------
+Cliente: A Tagima Woodstock ainda está com 30% da Black Friday?
+Tom: Oi! Eu sou o Tom, assistente virtual da Empório da Música, e você pode pedir um atendente humano quando quiser. Prefiro não arriscar uma informação errada por aqui, então vou pedir para a equipe confirmar com você. Vou passar seu atendimento para a equipe da loja. Registrei o chamado EMP-20260325-0001 e retornamos em até 24 horas úteis. Se preferir, o telefone é (67) 3341-4444.
+
+Cliente: Quanto fica ela no PIX?
+Tom: A Tagima Woodstock Dreadnought Natural sai por R$ 854,05 no PIX. 
+Posso ajudar em mais alguma coisa?
+
+Cliente: E o Giannini GF-3D, ainda tem a promoção Semana do Músico?
+Tom: Não, o Giannini GF‑3D não está com a promoção da Semana do Músico. 
+Posso ajudar em mais alguma coisa?
+
+------------------------------------------------------------------------
+Tools chamadas por turno: get_product, open_ticket | get_product | list_active_promotions
+Latência por turno: 21252 ms | 37237 ms | 38043 ms
+Tokens: 16021 entrada, 2175 saída
+Custo estimado: US$ 0.003317
