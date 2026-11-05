@@ -1,12 +1,14 @@
-"""Orquestração do pipeline medalhão (bronze → silver)."""
+"""Orquestração do pipeline medalhão (bronze → silver + relatório de qualidade)."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 import duckdb
 
 from emporio.ingestion.bronze import load_bronze
+from emporio.ingestion.quality import build_quality_report, write_quality_report
 from emporio.ingestion.silver import TableResult, build_silver
 from emporio.ports import Clock
 from emporio.settings import Settings
@@ -19,16 +21,19 @@ class IngestionResult:
     Attributes:
         bronze: Linhas carregadas por tabela na bronze.
         silver: Aceitas e quarentenadas por tabela na silver.
+        quality: Relatório de qualidade (regras D1 a D14).
     """
 
     bronze: dict[str, int]
     silver: dict[str, TableResult]
+    quality: dict[str, Any]
 
 
 def run_pipeline(settings: Settings, clock: Clock) -> IngestionResult:
     """Executa a ingestão completa e grava em ``settings.db_path``.
 
-    O pipeline é idempotente: bronze e silver são recriadas a cada execução.
+    O pipeline é idempotente: bronze e silver são recriadas a cada execução e o
+    relatório de qualidade é regravado em ``settings.quality_report_path``.
 
     Args:
         settings: Caminhos de origem, contratos e destino.
@@ -42,6 +47,8 @@ def run_pipeline(settings: Settings, clock: Clock) -> IngestionResult:
     try:
         bronze = load_bronze(con, settings.raw_dir, clock.now())
         silver = build_silver(con, settings.contracts_dir)
+        quality = build_quality_report(con, settings.reference_datetime.date())
     finally:
         con.close()
-    return IngestionResult(bronze=bronze, silver=silver)
+    write_quality_report(quality, settings.quality_report_path)
+    return IngestionResult(bronze=bronze, silver=silver, quality=quality)

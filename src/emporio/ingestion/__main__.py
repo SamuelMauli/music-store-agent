@@ -7,6 +7,7 @@ import sys
 from emporio.clock import SystemClock
 from emporio.domain.errors import DomainError
 from emporio.ingestion.pipeline import run_pipeline
+from emporio.ingestion.quality import format_quality_report
 from emporio.settings import Settings
 
 
@@ -29,6 +30,8 @@ def main() -> int:
             f"  {table:<12} bronze={count:>3}  silver={silver.accepted:>3}  "
             f"quarentena={silver.quarantined}"
         )
+    print(format_quality_report(result.quality))
+    print(f"relatório: {settings.quality_report_path}")
     return 0
 
 

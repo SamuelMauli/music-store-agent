@@ -1,0 +1,473 @@
+{
+  "reference_date": "2026-03-25",
+  "summary": {
+    "rules_evaluated": 17,
+    "rules_with_findings": 16
+  },
+  "rules": {
+    "empty_categories": {
+      "finding": "D1",
+      "entity": "categories",
+      "severity": "warning",
+      "description": "categorias cadastradas sem produto: responder que não há no catálogo",
+      "count": 3,
+      "affected_ids": [
+        6,
+        7,
+        8
+      ],
+      "details": {}
+    },
+    "brand_consistency": {
+      "finding": "D2",
+      "entity": "products",
+      "severity": "warning",
+      "description": "nome e descrição citam marcas diferentes: usar nome + specs, omitir a descrição",
+      "count": 7,
+      "affected_ids": [
+        135,
+        136,
+        137,
+        139,
+        140,
+        142,
+        144
+      ],
+      "details": {
+        "135": {
+          "name_brand": "music man",
+          "description_brands": [
+            "fender"
+          ]
+        },
+        "136": {
+          "name_brand": "ibanez",
+          "description_brands": [
+            "fender"
+          ]
+        },
+        "137": {
+          "name_brand": "yamaha",
+          "description_brands": [
+            "ibanez"
+          ]
+        },
+        "139": {
+          "name_brand": "yamaha",
+          "description_brands": [
+            "pearl"
+          ]
+        },
+        "140": {
+          "name_brand": "pearl",
+          "description_brands": [
+            "tama"
+          ]
+        },
+        "142": {
+          "name_brand": "korg",
+          "description_brands": [
+            "roland"
+          ]
+        },
+        "144": {
+          "name_brand": "roland",
+          "description_brands": [
+            "yamaha"
+          ]
+        }
+      }
+    },
+    "specs_match_description": {
+      "finding": "D3",
+      "entity": "products",
+      "severity": "warning",
+      "description": "specs contradizem a descrição: as specs prevalecem",
+      "count": 4,
+      "affected_ids": [
+        137,
+        139,
+        140,
+        142
+      ],
+      "details": {
+        "137": {
+          "field": "strings",
+          "description": 5,
+          "specs": 4
+        },
+        "139": {
+          "field": "shells",
+          "description": [
+            "poplar"
+          ],
+          "specs": "Maple"
+        },
+        "140": {
+          "field": "shells",
+          "description": [
+            "birch"
+          ],
+          "specs": "Maple"
+        },
+        "142": {
+          "field": "keys",
+          "description": 88,
+          "specs": 61
+        }
+      }
+    },
+    "specs_format_variant": {
+      "finding": "D4",
+      "entity": "products",
+      "severity": "info",
+      "description": "esquema de specs varia por categoria e parte do lote usa formatação diferente",
+      "count": 10,
+      "affected_ids": [
+        135,
+        136,
+        137,
+        138,
+        139,
+        140,
+        141,
+        142,
+        143,
+        144
+      ],
+      "details": {
+        "135": {
+          "spaced_json": true,
+          "numeric_as_text": [
+            "strings"
+          ]
+        },
+        "136": {
+          "spaced_json": true,
+          "numeric_as_text": [
+            "strings"
+          ]
+        },
+        "137": {
+          "spaced_json": true,
+          "numeric_as_text": [
+            "strings"
+          ]
+        },
+        "138": {
+          "spaced_json": true,
+          "numeric_as_text": [
+            "strings"
+          ]
+        },
+        "139": {
+          "spaced_json": true,
+          "numeric_as_text": [
+            "pieces"
+          ]
+        },
+        "140": {
+          "spaced_json": true,
+          "numeric_as_text": [
+            "pieces"
+          ]
+        },
+        "141": {
+          "spaced_json": true,
+          "numeric_as_text": [
+            "pieces"
+          ]
+        },
+        "142": {
+          "spaced_json": true,
+          "numeric_as_text": [
+            "keys",
+            "polyphony"
+          ]
+        },
+        "143": {
+          "spaced_json": true,
+          "numeric_as_text": [
+            "keys",
+            "polyphony"
+          ]
+        },
+        "144": {
+          "spaced_json": true,
+          "numeric_as_text": [
+            "keys",
+            "polyphony"
+          ]
+        },
+        "products_per_schema": {
+          "acoustic_guitar": 35,
+          "bass": 4,
+          "drums": 3,
+          "guitar": 5,
+          "keyboard": 3,
+          "ukulele": 15
+        }
+      }
+    },
+    "active_without_stock": {
+      "finding": "D5",
+      "entity": "products",
+      "severity": "warning",
+      "description": "ativo sem estoque: temporariamente indisponível, sugerir similares",
+      "count": 1,
+      "affected_ids": [
+        96
+      ],
+      "details": {}
+    },
+    "discontinued_without_stock": {
+      "finding": "D6",
+      "entity": "products",
+      "severity": "info",
+      "description": "descontinuado sem estoque: fora do catálogo, sugerir sucessor",
+      "count": 1,
+      "affected_ids": [
+        113
+      ],
+      "details": {}
+    },
+    "discontinued_has_stock": {
+      "finding": "D7",
+      "entity": "products",
+      "severity": "warning",
+      "description": "descontinuado com saldo: o status prevalece, não ofertar e sinalizar à loja",
+      "count": 1,
+      "affected_ids": [
+        136
+      ],
+      "details": {
+        "stock_quantity": {
+          "136": 13
+        }
+      }
+    },
+    "unreleased_in_orders": {
+      "finding": "D8",
+      "entity": "orders",
+      "severity": "warning",
+      "description": "produto em lançamento aparece em pedido: inconsistência de dados",
+      "count": 2,
+      "affected_ids": [
+        3,
+        14
+      ],
+      "details": {
+        "orders": {
+          "3": {
+            "status": "delivered",
+            "product_id": 130
+          },
+          "14": {
+            "status": "pending",
+            "product_id": 130
+          }
+        }
+      }
+    },
+    "order_total_mismatch": {
+      "finding": "D9",
+      "entity": "orders",
+      "severity": "warning",
+      "description": "total do pedido difere da soma dos itens: informar o total do pedido, nunca recalcular",
+      "count": 2,
+      "affected_ids": [
+        3,
+        20
+      ],
+      "details": {
+        "3": {
+          "total_brl": "3450.00",
+          "items_total": "3498.00",
+          "difference": "48.00"
+        },
+        "20": {
+          "total_brl": "1400.00",
+          "items_total": "1488.00",
+          "difference": "88.00"
+        }
+      }
+    },
+    "duplicate_email": {
+      "finding": "D10",
+      "entity": "customers",
+      "severity": "warning",
+      "description": "e-mail compartilhado: identidade exige pedido pertencente ao cliente",
+      "count": 2,
+      "affected_ids": [
+        11,
+        43
+      ],
+      "details": {
+        "b***@jmail.com": [
+          11,
+          43
+        ]
+      }
+    },
+    "multiple_promotions_per_product": {
+      "finding": "D11",
+      "entity": "promotions",
+      "severity": "info",
+      "description": "produtos com mais de uma promoção cadastrada",
+      "count": 3,
+      "affected_ids": [
+        93,
+        96,
+        99
+      ],
+      "details": {
+        "promotion_ids": {
+          "93": [
+            6,
+            23
+          ],
+          "96": [
+            8,
+            22
+          ],
+          "99": [
+            9,
+            25
+          ]
+        }
+      }
+    },
+    "multiple_active_promotions_per_product": {
+      "finding": "D11",
+      "entity": "promotions",
+      "severity": "warning",
+      "description": "mais de uma promoção ativa no produto: vale a de maior desconto",
+      "count": 0,
+      "affected_ids": [],
+      "details": {}
+    },
+    "active_promotions": {
+      "finding": "D11",
+      "entity": "promotions",
+      "severity": "info",
+      "description": "produtos com promoção ativa hoje (a flag é a única vigência)",
+      "count": 4,
+      "affected_ids": [
+        90,
+        94,
+        121,
+        127
+      ],
+      "details": {}
+    },
+    "promotions_without_validity_dates": {
+      "finding": "D11",
+      "entity": "promotions",
+      "severity": "info",
+      "description": "promoções sem vigência: 'vigente hoje' é a flag is_active",
+      "count": 25,
+      "affected_ids": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25
+      ],
+      "details": {}
+    },
+    "shipped_overdue": {
+      "finding": "D12",
+      "entity": "orders",
+      "severity": "warning",
+      "description": "despachado com entrega estimada vencida: pedir desculpas e oferecer chamado",
+      "count": 1,
+      "affected_ids": [
+        8
+      ],
+      "details": {
+        "8": {
+          "estimated_delivery": "2026-02-28",
+          "days_late": 25
+        },
+        "reference_date": "2026-03-25"
+      }
+    },
+    "delivered_without_receipt_date": {
+      "finding": "D13",
+      "entity": "orders",
+      "severity": "info",
+      "description": "sem data de recebimento: estimated_delivery serve de proxy declarado ao cliente",
+      "count": 7,
+      "affected_ids": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "details": {}
+    },
+    "missing_shipping_attributes": {
+      "finding": "D14",
+      "entity": "orders",
+      "severity": "info",
+      "description": "sem endereço, CEP, peso ou dimensões: explicar modalidades e prazos, sem cotar valor",
+      "count": 20,
+      "affected_ids": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ],
+      "details": {
+        "missing_columns": {
+          "orders": [
+            "address/cep"
+          ],
+          "products": [
+            "weight",
+            "dimensions"
+          ]
+        }
+      }
+    }
+  }
+}
