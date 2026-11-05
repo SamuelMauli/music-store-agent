@@ -32,6 +32,12 @@ def debug_table(result: ChatResult) -> Table:
         "tokens": f"{result.usage.input_tokens} in / {result.usage.output_tokens} out",
         "chamadas LLM": str(result.usage.calls),
         "custo do turno": f"US$ {result.usage.cost_usd:.6f}",
+        "conversa": (
+            f"{result.conversation_usage.input_tokens} in / "
+            f"{result.conversation_usage.output_tokens} out · "
+            f"{result.conversation_usage.calls} chamadas · "
+            f"US$ {result.conversation_usage.cost_usd:.6f}"
+        ),
         "latência": f"{result.latency_ms} ms",
         "handoff": "sim" if result.handoff else "não",
         "bloqueado": "sim" if result.blocked else "não",

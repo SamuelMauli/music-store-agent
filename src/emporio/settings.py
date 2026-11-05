@@ -7,11 +7,18 @@ from pathlib import Path
 from typing import Literal, Self
 from zoneinfo import ZoneInfo
 
-from pydantic import SecretStr, model_validator
+from pydantic import BaseModel, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _STORE_TZ = "America/Campo_Grande"
 POLICY_PDF_NAME = "politicas_da_loja.pdf"
+
+
+class ModelPrice(BaseModel):
+    """Preço de um modelo em US$ por milhão de tokens."""
+
+    input: float
+    output: float
 
 
 class Settings(BaseSettings):
@@ -40,6 +47,11 @@ class Settings(BaseSettings):
         llm_timeout_seconds: Limite por chamada ao provedor.
         llm_max_tokens: Teto de tokens de saída por chamada.
         llm_price_*: Preço em US$ por milhão de tokens, usado só para estimar custo do turno.
+        llm_price_table: Preço por nome de modelo (``EMPORIO_LLM_PRICE_TABLE`` em JSON, ex.:
+            ``{"openai/gpt-oss-20b": {"input": 0.075, "output": 0.3}}``); vence o preço do tier.
+        otel_exporter: ``none`` (no-op), ``console``, ``jsonl`` (arquivo) ou ``otlp``.
+        otel_jsonl_path: Destino do exportador ``jsonl`` (ignorado no git).
+        otel_endpoint: Endpoint OTLP/HTTP dos traces (exige o pacote do exportador OTLP).
     """
 
     model_config = SettingsConfigDict(env_prefix="EMPORIO_", env_file=".env", extra="ignore")
@@ -68,6 +80,18 @@ class Settings(BaseSettings):
     llm_price_small_output: float = 0.30
     llm_price_medium_input: float = 0.15
     llm_price_medium_output: float = 0.60
+    llm_price_table: dict[str, ModelPrice] = {}
+    otel_exporter: Literal["none", "console", "jsonl", "otlp"] = "none"
+    otel_jsonl_path: Path = Path("data/traces.jsonl")
+    otel_endpoint: str = "http://localhost:4318/v1/traces"
+
+    def price_for(self, model: str, tier: Literal["small", "medium"]) -> tuple[float, float]:
+        """Preço (entrada, saída) por milhão de tokens: tabela por modelo, senão o do tier."""
+        if (entry := self.llm_price_table.get(model)) is not None:
+            return entry.input, entry.output
+        if tier == "small":
+            return self.llm_price_small_input, self.llm_price_small_output
+        return self.llm_price_medium_input, self.llm_price_medium_output
 
     @property
     def policy_pdf(self) -> Path:

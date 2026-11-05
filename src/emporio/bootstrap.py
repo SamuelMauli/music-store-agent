@@ -29,6 +29,8 @@ from emporio.agent.service import ChatService
 from emporio.agent.tools import ToolRegistry, build_registry
 from emporio.clock import FixedClock, SystemClock
 from emporio.guardrails.rate_limit import SlidingWindowLimiter
+from emporio.observability import Telemetry, build_telemetry
+from emporio.observability.tracing_llm import TracingLLM
 from emporio.ports import Clock, TicketRepository
 from emporio.settings import Settings
 
@@ -38,14 +40,16 @@ class Container:
     """Objetos de longa vida da aplicação."""
 
     service: ChatService
+    telemetry: Telemetry
     registry: ToolRegistry
     connection: duckdb.DuckDBPyConnection
     closers: list[Callable[[], object]] = field(default_factory=list)
 
     def close(self) -> None:
-        """Libera as conexões abertas (DuckDB e SQLite)."""
+        """Libera as conexões abertas (DuckDB e SQLite) e descarrega os spans."""
         for closer in self.closers:
             closer()
+        self.telemetry.shutdown()
         self.connection.close()
 
 
@@ -56,6 +60,7 @@ def build_container(
     clock: Clock | None = None,
     checkpointer: BaseCheckpointSaver[Any] | None = None,
     tickets: TicketRepository | None = None,
+    telemetry: Telemetry | None = None,
 ) -> Container:
     """Monta o serviço de conversa.
 
@@ -65,10 +70,12 @@ def build_container(
         clock: Relógio; default é o fixo de ``reference_datetime`` ou o do sistema.
         checkpointer: Memória por sessão; default é SQLite em ``checkpoint_path``.
         tickets: Repositório de chamados; default é SQLite em ``tickets_path``.
+        telemetry: Tracing; default vem de ``settings.otel_exporter`` (``none`` = no-op).
 
     Returns:
         Container com o ``ChatService`` pronto.
     """
+    telemetry = telemetry or build_telemetry(settings)
     connection = duckdb.connect(str(settings.db_path), read_only=True)
     lock = threading.RLock()
     use_clock = clock or (
@@ -97,15 +104,19 @@ def build_container(
     if llm is None:
         names = [r[0] for r in connection.execute("select name from silver.products").fetchall()]
         llm = factory.build(settings, names)
+    if telemetry.enabled:
+        llm = TracingLLM(llm, telemetry, settings)
+        registry.instrument(telemetry)
     if checkpointer is None:
         if str(settings.checkpoint_path) != ":memory:":
             settings.checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
         memory = sqlite3.connect(str(settings.checkpoint_path), check_same_thread=False)
         closers.append(memory.close)
         checkpointer = SqliteSaver(memory)
-    graph = build_graph(Deps(llm, registry, retriever, use_clock), checkpointer)
+    graph = build_graph(Deps(llm, registry, retriever, use_clock), checkpointer, telemetry)
     return Container(
-        ChatService(graph, SlidingWindowLimiter(settings.rate_limit_per_minute, 60.0)),
+        ChatService(graph, SlidingWindowLimiter(settings.rate_limit_per_minute, 60.0), telemetry),
+        telemetry,
         registry,
         connection,
         closers,

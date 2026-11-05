@@ -6,7 +6,7 @@ import logging
 import time
 import uuid
 from collections.abc import Iterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from langchain_core.runnables import RunnableConfig
@@ -17,6 +17,8 @@ from emporio.agent.prompts import prompt_hash
 from emporio.agent.state import ChatState
 from emporio.domain.pii import mask_pii
 from emporio.guardrails.rate_limit import SlidingWindowLimiter
+from emporio.observability.telemetry import NOOP, Telemetry, attributes_of
+from emporio.observability.usage import UsageAccumulator
 
 RECURSION_LIMIT = 25
 log = logging.getLogger("emporio.chat")
@@ -33,6 +35,7 @@ class ChatResult:
     tools: list[str] = field(default_factory=list)
     sources: list[str] = field(default_factory=list)
     usage: Usage = field(default_factory=Usage)
+    conversation_usage: Usage = field(default_factory=Usage)
     handoff: bool = False
     blocked: bool = False
     latency_ms: int = 0
@@ -43,15 +46,25 @@ class ChatResult:
 class ChatService:
     """Executa turnos no grafo; o histórico vive no checkpointer (por ``thread_id``)."""
 
-    def __init__(self, graph: CompiledChat, limiter: SlidingWindowLimiter | None = None) -> None:
+    def __init__(
+        self,
+        graph: CompiledChat,
+        limiter: SlidingWindowLimiter | None = None,
+        telemetry: Telemetry = NOOP,
+        usage: UsageAccumulator | None = None,
+    ) -> None:
         """Cria o serviço.
 
         Args:
             graph: Grafo compilado, com checkpointer quando houver memória.
             limiter: Limite de mensagens por sessão (``RateLimitedError`` ao exceder).
+            telemetry: Tracing; cada turno é um span ``invoke_agent`` (no-op por padrão).
+            usage: Acumulador de tokens e custo por conversa.
         """
         self._graph = graph
         self._limiter = limiter
+        self._telemetry = telemetry
+        self._usage = usage or UsageAccumulator()
 
     @staticmethod
     def _config(session_id: str, text: str) -> RunnableConfig:
@@ -103,16 +116,51 @@ class ChatService:
         )
         return result
 
+    def _turn_span(self, session_id: str) -> Any:
+        return self._telemetry.span(
+            "invoke_agent Tom",
+            **{
+                "gen_ai.operation.name": "invoke_agent",
+                "gen_ai.agent.name": "Tom",
+                "gen_ai.conversation.id": session_id,
+                "session_id": session_id,
+            },
+        )
+
+    def _finish(self, span: Any, state: dict[str, Any], result: ChatResult) -> ChatResult:
+        """Soma o turno à conversa, anota o span do turno e registra o log."""
+        result = replace(
+            result, conversation_usage=self._usage.add(result.session_id, result.usage)
+        )
+        products = [str(p["product_id"]) for p in state.get("last_products") or [] if result.tools]
+        attributes = attributes_of(
+            **{
+                "prompt_hash": result.prompt_hash,
+                "section_ids": ",".join(result.sources),
+                "product_ids": ",".join(products),
+                "gen_ai.usage.input_tokens": result.usage.input_tokens,
+                "gen_ai.usage.output_tokens": result.usage.output_tokens,
+                "emporio.cost_usd": result.usage.cost_usd,
+                "emporio.conversation_cost_usd": result.conversation_usage.cost_usd,
+                "emporio.turn": result.turn,
+                "emporio.handoff": result.handoff,
+                "emporio.blocked": result.blocked,
+                "emporio.tools": ",".join(result.tools),
+            }
+        )
+        span.set_attributes(attributes)
+        return self._log(result)
+
     def chat(self, session_id: str, text: str, request_id: str | None = None) -> ChatResult:
         """Processa uma mensagem e devolve a resposta final."""
         self._admit(session_id, text)
         started = time.perf_counter()
-        state = self._graph.invoke(
-            ChatState(session_id=session_id),
-            self._config(session_id, text),
-        )
-        rid = request_id or uuid.uuid4().hex
-        return self._log(self._result(dict(state), session_id, started, rid))
+        with self._turn_span(session_id) as span:
+            state = dict(
+                self._graph.invoke(ChatState(session_id=session_id), self._config(session_id, text))
+            )
+            rid = request_id or uuid.uuid4().hex
+            return self._finish(span, state, self._result(state, session_id, started, rid))
 
     def stream(
         self, session_id: str, text: str, request_id: str | None = None
@@ -130,18 +178,21 @@ class ChatService:
     ) -> Iterator[tuple[str, Any]]:
         started = time.perf_counter()
         rid = request_id or uuid.uuid4().hex
-        for update in self._graph.stream(
-            ChatState(session_id=session_id),
-            self._config(session_id, text),
-            stream_mode="updates",
-        ):
-            for node in update:
-                yield "node", node
-        snapshot = self._graph.get_state(self._config(session_id, text))
-        yield "result", self._log(self._result(dict(snapshot.values), session_id, started, rid))
+        with self._turn_span(session_id) as span:
+            for update in self._graph.stream(
+                ChatState(session_id=session_id),
+                self._config(session_id, text),
+                stream_mode="updates",
+            ):
+                for node in update:
+                    yield "node", node
+            snapshot = self._graph.get_state(self._config(session_id, text))
+            state = dict(snapshot.values)
+            yield "result", self._finish(span, state, self._result(state, session_id, started, rid))
 
     def reset(self, session_id: str) -> None:
         """Apaga a memória da sessão."""
+        self._usage.reset(session_id)
         saver = self._graph.checkpointer
         if saver is not None and hasattr(saver, "delete_thread"):
             saver.delete_thread(session_id)

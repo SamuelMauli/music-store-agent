@@ -23,6 +23,7 @@ from emporio.agent.tools.results import (
     to_json,
 )
 from emporio.domain.pii import mask_pii
+from emporio.observability.telemetry import NOOP, Telemetry
 
 logger = logging.getLogger("emporio.tools")
 
@@ -152,6 +153,11 @@ class ToolRegistry:
         self._lock = lock or threading.RLock()
         self._timeout = timeout
         self._pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="tool")
+        self._telemetry = NOOP
+
+    def instrument(self, telemetry: Telemetry) -> None:
+        """Passa a emitir um span ``execute_tool`` por chamada."""
+        self._telemetry = telemetry
 
     @property
     def names(self) -> list[str]:
@@ -175,10 +181,22 @@ class ToolRegistry:
         """Executa uma tool com timeout, trava de dados e log com PII mascarada."""
         started = time.monotonic()
         tool = self._tools.get(name)
-        if tool is None:
-            result: ToolResult[Any] = ToolError(f"Ferramenta desconhecida: {name}.")
-        else:
-            result = self._run_bounded(tool, raw_args, ctx)
+        with self._telemetry.span(
+            f"execute_tool {name}",
+            **{
+                "gen_ai.operation.name": "execute_tool",
+                "gen_ai.tool.name": name,
+                "gen_ai.tool.type": "function",
+            },
+        ) as span:
+            if tool is None:
+                result: ToolResult[Any] = ToolError(f"Ferramenta desconhecida: {name}.")
+            else:
+                result = self._run_bounded(tool, raw_args, ctx)
+            status = type(result).__name__
+            span.set_attribute("emporio.tool.status", status)
+            if isinstance(result, ToolError):
+                self._telemetry.fail(span, status)
         duration = int((time.monotonic() - started) * 1000)
         logger.info(
             "tool=%s result=%s ms=%d args=%s",

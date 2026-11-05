@@ -20,3 +20,6 @@ data/quality_report.json
 # memória e chamados em execução
 data/*.sqlite
 data/*.sqlite-*
+
+# traces OTel locais
+data/traces.jsonl

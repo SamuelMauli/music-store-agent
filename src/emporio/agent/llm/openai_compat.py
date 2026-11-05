@@ -130,12 +130,14 @@ class OpenAICompatibleLLM:
             raise LLMError("O modelo não devolveu a saída estruturada esperada.")
         return parsed, self._usage(result.get("raw"), tier)
 
-    def _chat(self, tier: Tier, temperature: float) -> BaseChatModel:
+    def _model(self, tier: Tier) -> str:
         settings = self._settings
-        model = self._override or (
+        return self._override or (
             settings.llm_model_small if tier == "small" else settings.llm_model_medium
         )
-        return self._factory(model, temperature, settings.llm_max_tokens)
+
+    def _chat(self, tier: Tier, temperature: float) -> BaseChatModel:
+        return self._factory(self._model(tier), temperature, self._settings.llm_max_tokens)
 
     def _default_factory(self, model: str, temperature: float, max_tokens: int) -> BaseChatModel:
         settings = self._settings
@@ -162,11 +164,6 @@ class OpenAICompatibleLLM:
     def _usage(self, message: Any, tier: Tier) -> Usage:
         meta = cast("dict[str, int]", getattr(message, "usage_metadata", None) or {})
         tokens_in, tokens_out = meta.get("input_tokens", 0), meta.get("output_tokens", 0)
-        s = self._settings
-        price_in, price_out = (
-            (s.llm_price_small_input, s.llm_price_small_output)
-            if tier == "small"
-            else (s.llm_price_medium_input, s.llm_price_medium_output)
-        )
+        price_in, price_out = self._settings.price_for(self._model(tier), tier)
         cost = (tokens_in * price_in + tokens_out * price_out) / _PER_MILLION
         return Usage(tokens_in, tokens_out, cost, 1)

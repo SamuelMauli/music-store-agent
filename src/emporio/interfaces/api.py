@@ -55,6 +55,7 @@ def _chunks(text: str) -> Iterator[str]:
 def _done(result: ChatResult) -> dict[str, Any]:
     data = asdict(result)
     data["usage"] = result.usage.to_dict()
+    data["conversation_usage"] = result.conversation_usage.to_dict()
     del data["answer"]
     return data
 
