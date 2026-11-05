@@ -134,3 +134,25 @@ def test_reason_defaults_to_regret_and_prompt_never_asks_for_it() -> None:
         policy_context=[],
     )
     assert "nunca pergunte o motivo" in text.lower()
+
+
+def test_prompt_resolves_pronoun_and_checks_product_for_promotion() -> None:
+    """Regressão do exemplo 02: "ela" após citar o produto não pode virar "qual produto?"."""
+    text = render(
+        "system",
+        now_text="x",
+        store_open=True,
+        next_opening="x",
+        customer_first_name="",
+        order_id=None,
+        summary="",
+        focus_products=[],
+        route_intents=[],
+        route_entities="",
+        scope_notes=[],
+        feedback="",
+        policy_context=[],
+    )
+    assert "nunca pergunte" in text
+    assert "qual produto" in text
+    assert "não responda só pela" in text
