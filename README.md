@@ -80,7 +80,7 @@ Full stack: `make docker-build && make compose-up` (api + Postgres 17 + Redis 7 
 ## Architecture
 
 ```mermaid
-flowchart LR
+flowchart TD
     S([message]) --> IG[input_guard]
     IG -->|continue| RT[router]
     RT -->|continue| SG[scope_gate]
