@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Collection
+from datetime import timedelta
 from decimal import Decimal
 from typing import Literal
 
@@ -11,6 +12,7 @@ from pydantic import BaseModel, Field
 from emporio.agent.tools.base import Tool, ToolContext
 from emporio.agent.tools.formatting import brl, when
 from emporio.agent.tools.results import Ambiguous, NotFound, Ok, ToolResult
+from emporio.domain.calendar import DEFAULT_CALENDAR, HolidayCalendar
 from emporio.domain.value_objects import Money
 from emporio.policies.shipping import (
     FREE_SHIPPING_ABOVE,
@@ -33,6 +35,7 @@ from emporio.policies.store import (
 from emporio.ports import Clock, PolicyRetriever, ProductRepository
 
 POLICY_TOP_K = 3
+NEXT_OPENING_SCAN = 15
 
 
 class ShippingModeView(BaseModel):
@@ -181,12 +184,16 @@ class GetStoreInfo(Tool[StoreInfoInput, StoreInfoView]):
     )
     input_model = StoreInfoInput
 
-    def __init__(self, clock: Clock) -> None:
+    def __init__(self, clock: Clock, calendar: HolidayCalendar = DEFAULT_CALENDAR) -> None:
         self._clock = clock
+        self._calendar = calendar
 
     def run(self, args: StoreInfoInput, ctx: ToolContext) -> ToolResult[StoreInfoView]:
         """Monta a resposta do tópico a partir de §1.2, §2 e §7."""
         now = self._clock.now()
+        today = now.date()
+        # feriados nacionais fecham a loja (§2); janela cobre a busca de 14 dias de next_opening
+        holidays = self._calendar.holidays_between(today, today + timedelta(days=NEXT_OPENING_SCAN))
         match args.topic:
             case "address":
                 return Ok(
@@ -205,13 +212,13 @@ class GetStoreInfo(Tool[StoreInfoInput, StoreInfoView]):
             case "hours":
                 return Ok(StoreInfoView(topic="hours", hours=opening_hours_text()), sources=("§2",))
             case "open_now":
-                is_open = is_store_open(now)
+                is_open = is_store_open(now, holidays)
                 return Ok(
                     StoreInfoView(
                         topic="open_now",
                         open_now=is_open,
                         now=when(now),
-                        next_opening=None if is_open else when(next_opening(now)),
+                        next_opening=None if is_open else when(next_opening(now, holidays)),
                         hours=SPECIAL_DATES_NOTE,
                     ),
                     sources=("§2",),
