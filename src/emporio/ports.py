@@ -9,6 +9,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from emporio.domain.entities import CatalogEntry, Customer, Order, Promotion
+from emporio.domain.handoff import ClaimResult, HandoffConversation
 from emporio.domain.lookup import NameLookup
 from emporio.domain.policy import PolicySnippet
 from emporio.domain.specifications import Specification
@@ -124,4 +125,59 @@ class RateLimiter(Protocol):
 
     def check(self, key: str) -> None:
         """Registra o evento ou levanta ``RateLimitedError`` com ``retry_after`` em segundos."""
+        ...
+
+
+class HandoffStore(Protocol):
+    """Conversas em atendimento humano (o bot não responde) e a fila de mensagens do cliente.
+
+    Todo método recebe ``now`` (epoch): conversas com ``expires_at <= now`` já não existem.
+    """
+
+    def enter(self, conv_id: str, phone: str, now: float, expires_at: float) -> bool:
+        """Põe a conversa em handoff; ``False`` se já estava (não reinicia nada)."""
+        ...
+
+    def is_human(self, conv_id: str, now: float) -> bool:
+        """``True`` se a conversa está em handoff e não expirou."""
+        ...
+
+    def append(self, conv_id: str, direction: str, text: str, now: float) -> None:
+        """Anexa mensagem ao histórico do handoff (sem efeito se a conversa não existe)."""
+        ...
+
+    def get(self, conv_id: str, now: float) -> HandoffConversation | None:
+        """Conversa com o histórico, ou ``None``."""
+        ...
+
+    def list_active(self, now: float) -> list[HandoffConversation]:
+        """Conversas ativas, da que entrou há mais tempo à mais recente (histórico incluso)."""
+        ...
+
+    def claim(self, conv_id: str, operator: str, now: float, expires_at: float) -> ClaimResult:
+        """Assume (ou reassume, se já é dele); ``TAKEN`` se outro operador é o dono."""
+        ...
+
+    def extend(self, conv_id: str, operator: str, expires_at: float, now: float) -> bool:
+        """Renova a expiração se ``operator`` é o dono; ``False`` caso contrário."""
+        ...
+
+    def release(self, conv_id: str) -> HandoffConversation | None:
+        """Devolve ao bot: apaga a conversa e o histórico e devolve o que existia."""
+        ...
+
+
+class MessageDeduplicator(Protocol):
+    """Idempotência por id de mensagem do canal (a Meta reentrega o mesmo webhook)."""
+
+    def first_seen(self, message_id: str, now: float) -> bool:
+        """``True`` na 1ª vez que o id aparece (e o registra); ``False`` nas repetições."""
+        ...
+
+
+class MessageSender(Protocol):
+    """Saída de mensagens de texto por um canal de mensageria."""
+
+    def send_text(self, to: str, body: str) -> None:
+        """Envia o texto; levanta ``MessageDeliveryError`` se não foi possível entregar."""
         ...
