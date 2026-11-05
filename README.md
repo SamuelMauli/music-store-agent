@@ -727,7 +727,7 @@ Contexto: mudança de prompt é mudança de comportamento e precisa ser rastreá
 
 ## Limitações honestas e próximos passos
 
-- **Só o Gemini foi validado ao vivo de ponta a ponta na camada multi-provedor.** O Groq foi validado antes dela (relatório versionado), mas no dia da rodada multi-provedor estava com a cota diária esgotada. Os demais provedores estão cobertos por testes unitários do registro e da montagem, não por eval ao vivo.
+- **Só o Gemini foi validado ao vivo de ponta a ponta na camada multi-provedor.** O Groq foi validado antes dela (relatório versionado, 20/23). Uma nova rodada sobre o código final foi interrompida porque o plano gratuito limita o `gpt-oss-120b` a 8.000 tokens por minuto, menos do que um caso com o manual inteiro no contexto consome (medido nos cabeçalhos `x-ratelimit-limit-tokens`). Os demais provedores estão cobertos por testes unitários do registro e da montagem, não por eval ao vivo.
 - **Modelos locais pequenos falham em tool calling.** O `qwen2.5-coder:7b` via Ollama reprovou tool calling e saída estruturada no `make llm-check`.
 - **Sem Vertex AI.** O provedor `google` usa a API do Gemini (`langchain-google-genai`), não o Vertex AI.
 - **Latência do tier gratuito do Gemini.** p50 de 13,2 s e p95 de 38,5 s na rodada 1 refletem as cotas do plano gratuito; um plano pago reduz esse número.
