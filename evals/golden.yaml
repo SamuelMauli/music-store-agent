@@ -268,7 +268,7 @@
     tool_calls:
       - {name: check_return_eligibility, args: {order_id: 7}}
     must_mention: ["4.1", "dia 4 de 7"]
-    must_mention_any: ["dá para devolver", "da para devolver", "elegível", "elegivel", "pode devolver", "pode ser devolvido"]
+    must_mention_any: ["dá para devolver", "da para devolver", "elegível", "elegivel", "pode devolver", "pode ser devolvido", "dentro do prazo"]
     grounded_numbers: true
 
 - id: devolucao-pedido-7-loja-pergunta-canal
