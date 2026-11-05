@@ -1,4 +1,4 @@
-.PHONY: setup ingest chat api test lint typecheck check eval-retrieval eval eval-replay eval-live
+.PHONY: setup ingest chat api test lint typecheck check eval-retrieval eval eval-replay eval-live examples
 
 setup:
 	uv sync --frozen
@@ -39,3 +39,7 @@ chat:
 
 api:
 	uv run uvicorn --factory emporio.interfaces.api:create_app --host 127.0.0.1 --port 8000
+
+# transcricoes reais (EMPORIO_LLM_*) em examples/; plano gratuito: EMPORIO_EVAL_SLEEP=62 make examples
+examples:
+	uv run python -m emporio.evals.examples
