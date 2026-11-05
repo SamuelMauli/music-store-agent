@@ -15,6 +15,7 @@ from emporio.domain.text import normalize_text
 
 CONTACT_PLACEHOLDER: Final = "[contato omitido]"
 CPF_PLACEHOLDER: Final = "[cpf omitido]"
+CARD_PLACEHOLDER: Final = "[cartão omitido]"
 _ORDER: Final = re.compile(r"(?:pedido|ped)\s*(?:numero|num|n|no|#)?\s*(\d{1,6})\b|#(\d{1,6})\b")
 _BARE_NUMBER: Final = re.compile(r"(?<![\d.,])(\d{1,6})(?![\d.,])")
 
@@ -38,12 +39,15 @@ class Identity:
         return self.order_id is not None or self.has_contact
 
 
+_PLACEHOLDERS: Final = {"cpf": CPF_PLACEHOLDER, "card": CARD_PLACEHOLDER}
+
+
 def redact(text: str) -> str:
-    """Troca e-mail, telefone e CPF por marcadores neutros."""
+    """Troca e-mail, telefone, CPF e cartão por marcadores neutros."""
     out, cursor = [], 0
     for match in find_pii(text):
         out.append(text[cursor : match.start])
-        out.append(CPF_PLACEHOLDER if match.kind == "cpf" else CONTACT_PLACEHOLDER)
+        out.append(_PLACEHOLDERS.get(match.kind, CONTACT_PLACEHOLDER))
         cursor = match.end
     out.append(text[cursor:])
     return "".join(out)
