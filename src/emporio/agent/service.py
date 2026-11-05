@@ -190,6 +190,11 @@ class ChatService:
             state = dict(snapshot.values)
             yield "result", self._finish(span, state, self._result(state, session_id, started, rid))
 
+    def snapshot(self, session_id: str) -> dict[str, Any]:
+        """Estado atual da sessão (tool traces do último turno, rota, memória) para avaliação."""
+        config: RunnableConfig = {"configurable": {"thread_id": session_id}}
+        return dict(self._graph.get_state(config).values)
+
     def reset(self, session_id: str) -> None:
         """Apaga a memória da sessão."""
         self._usage.reset(session_id)

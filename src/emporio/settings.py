@@ -49,6 +49,8 @@ class Settings(BaseSettings):
         llm_price_*: Preço em US$ por milhão de tokens, usado só para estimar custo do turno.
         llm_price_table: Preço por nome de modelo (``EMPORIO_LLM_PRICE_TABLE`` em JSON, ex.:
             ``{"openai/gpt-oss-20b": {"input": 0.075, "output": 0.3}}``); vence o preço do tier.
+        eval_sleep: Segundos entre turnos no ``make eval-live`` (limite de tokens por minuto).
+        eval_judge_model: Modelo do LLM-juiz (família diferente da do gerador).
         otel_exporter: ``none`` (no-op), ``console``, ``jsonl`` (arquivo) ou ``otlp``.
         otel_jsonl_path: Destino do exportador ``jsonl`` (ignorado no git).
         otel_endpoint: Endpoint OTLP/HTTP dos traces (exige o pacote do exportador OTLP).
@@ -81,6 +83,8 @@ class Settings(BaseSettings):
     llm_price_medium_input: float = 0.15
     llm_price_medium_output: float = 0.60
     llm_price_table: dict[str, ModelPrice] = {}
+    eval_sleep: float = 0.0
+    eval_judge_model: str | None = None
     otel_exporter: Literal["none", "console", "jsonl", "otlp"] = "none"
     otel_jsonl_path: Path = Path("data/traces.jsonl")
     otel_endpoint: str = "http://localhost:4318/v1/traces"

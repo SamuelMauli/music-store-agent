@@ -1,0 +1,454 @@
+# Casos dourados: o agente deve usar a tool certa e citar os valores reais da base.
+# live: true  -> também roda no `make eval-live` (subconjunto que cabe no plano gratuito).
+# fake: false -> o NLU por regras do modo offline não resolve; só vale com LLM real.
+
+# ---------- catálogo ----------
+- id: cat-violoes-ate-1000
+  live: true
+  turns: ["Quais violões vocês têm até R$ 1.000?"]
+  expect:
+    intents: [catalog_search]
+    tool_calls:
+      - {name: search_products, args: {max_price: 1000}}
+    must_mention: ["12"]
+    grounded_numbers: true
+
+- id: cat-nylon-ate-800
+  turns: ["Tem violão de nylon até 800 reais?"]
+  expect:
+    intents: [catalog_search]
+    tool_calls:
+      - {name: search_products, args: {max_price: 800}}
+    grounded_numbers: true
+
+- id: cat-guitarras
+  live: true
+  turns: ["Quais guitarras vocês vendem?"]
+  expect:
+    intents: [catalog_search]
+    tool_calls:
+      - {name: search_products}
+    grounded_numbers: true
+
+- id: cat-baixos
+  turns: ["Quais baixos vocês têm?"]
+  expect:
+    intents: [catalog_search]
+    tool_calls:
+      - {name: search_products}
+    grounded_numbers: true
+
+- id: cat-ukulele
+  turns: ["Tem ukulele?"]
+  expect:
+    intents: [catalog_search]
+    tool_calls:
+      - {name: search_products}
+    grounded_numbers: true
+
+- id: cat-teclados
+  turns: ["Quais teclados vocês têm?"]
+  expect:
+    intents: [catalog_search]
+    tool_calls:
+      - {name: search_products}
+    grounded_numbers: true
+
+- id: cat-mais-barato
+  turns: ["Qual o violão mais barato que vocês têm?"]
+  expect:
+    intents: [catalog_search]
+    tool_calls:
+      - {name: search_products}
+    must_mention: ["429,90"]
+    grounded_numbers: true
+
+- id: cat-iniciante-1500
+  fake: false
+  turns: ["Me recomende um violão para iniciante até R$ 1.500"]
+  expect:
+    tool_calls:
+      - {name: search_products, args: {max_price: 1500}}
+    grounded_numbers: true
+
+- id: cat-comparar-yamaha
+  fake: false
+  turns: ["Compare o Yamaha C40 com o Yamaha C70"]
+  expect:
+    tool_calls:
+      - {name: get_product}
+    must_mention: ["C40", "C70"]
+    grounded_numbers: true
+
+# ---------- produto, preço, PIX e parcelas ----------
+- id: prod-takamine-gd20
+  live: true
+  turns: ["Quanto custa o Takamine GD20?"]
+  expect:
+    intents: [product_detail]
+    tool_calls:
+      - {name: get_product}
+    must_mention: ["2.199,00"]
+    grounded_numbers: true
+
+- id: prod-takamine-pix-parcelado
+  live: true
+  turns: ["Quanto custa o Takamine GD20 no PIX e parcelado?"]
+  expect:
+    intents: [payment_simulation]
+    tool_calls:
+      - {name: simulate_payment, args: {product_ids: [95]}}
+    must_mention: ["2.089,05", "12x"]
+    grounded_numbers: true
+
+- id: prod-takamine-estoque
+  turns: ["Tem estoque do Takamine GD20?"]
+  expect:
+    tool_calls:
+      - {name: get_product}
+    must_mention: ["5"]
+    grounded_numbers: true
+
+- id: prod-takamine-12x
+  turns: ["Posso parcelar o Takamine GD20 em 12x?"]
+  expect:
+    intents: [payment_simulation]
+    tool_calls:
+      - {name: simulate_payment, args: {product_ids: [95]}}
+    must_mention: ["12x", "183,25"]
+    grounded_numbers: true
+
+- id: prod-yamaha-c40-6x
+  turns: ["Posso parcelar o Yamaha C40 em 12x?"]
+  expect:
+    intents: [payment_simulation]
+    tool_calls:
+      - {name: simulate_payment, args: {product_ids: [81]}}
+    must_mention: ["6x", "569,91"]
+    grounded_numbers: true
+
+- id: prod-gibson-les-paul
+  turns: ["Tem estoque do Gibson Les Paul Standard?"]
+  expect:
+    tool_calls:
+      - {name: get_product}
+    must_mention: ["18.900,00"]
+    grounded_numbers: true
+
+- id: prod-sem-estoque
+  fake: false
+  turns: ["Tem o Giannini GF-3D Dreadnought Sunburst?"]
+  expect:
+    tool_calls:
+      - {name: get_product}
+    must_mention_any: ["sem estoque", "esgotad", "indisponível", "indisponivel"]
+    grounded_numbers: true
+
+- id: prod-descontinuado
+  fake: false
+  turns: ["Ainda vendem o Shelby SN-7C de 7 cordas?"]
+  expect:
+    tool_calls:
+      - {name: get_product}
+    must_mention_any: ["descontinuad", "fora de linha", "não está mais", "nao esta mais"]
+    grounded_numbers: true
+
+- id: prod-parcelamento-regras
+  fake: false
+  turns: ["Quais as regras de parcelamento da loja?"]
+  expect:
+    tool_calls:
+      - {name: search_policies}
+    must_mention_any: ["sem juros", "6x", "12x"]
+    grounded_numbers: true
+
+# ---------- promoções ----------
+- id: promo-ativas
+  live: true
+  turns: ["Quais são as promoções ativas?"]
+  expect:
+    intents: [active_promotions]
+    tool_calls:
+      - {name: list_active_promotions}
+    must_mention: ["Crafter HT-100", "Taylor 110e", "Ohana CK-20", "Kalani KAL-700T"]
+    grounded_numbers: true
+
+- id: promo-ohana
+  turns: ["O Ohana CK-20 está em promoção?"]
+  expect:
+    tool_calls:
+      - {name: list_active_promotions}
+    must_mention: ["439,20"]
+    grounded_numbers: true
+
+- id: promo-crafter-pix
+  turns: ["Quanto fica o Crafter HT-100 no PIX?"]
+  expect:
+    intents: [payment_simulation]
+    tool_calls:
+      - {name: simulate_payment, args: {product_ids: [90]}}
+    must_mention: ["1.967,18", "6.2"]
+    grounded_numbers: true
+
+- id: promo-takamine-nao-vigente
+  fake: false
+  turns: ["O Takamine GD20 ainda está com 12% de desconto?"]
+  expect:
+    tool_calls:
+      - {name: get_product}
+    must_not_mention: ["1.935", "1.935,12"]
+    must_mention: ["2.199,00"]
+    grounded_numbers: true
+
+- id: promo-taylor
+  fake: false
+  turns: ["Qual o preço do Taylor 110e com a promoção?"]
+  expect:
+    tool_calls:
+      - {name: get_product}
+    must_mention: ["5.519,08"]
+    grounded_numbers: true
+
+# ---------- pedido (com verificação) ----------
+- id: pedido-7-status
+  live: true
+  turns: ["Onde está meu pedido 7?", "leticia.rocha@jmail.com"]
+  expect:
+    intents: [order_status]
+    tool_calls:
+      - {name: verify_customer, args: {order_id: 7}}
+      - {name: get_order_status, args: {order_id: 7}}
+    must_mention: ["entregue", "BRKR1122334BR"]
+    grounded_numbers: true
+
+- id: pedido-8-atrasado
+  turns: ["Onde está meu pedido 8?", "anacarol.ferreira@coldmail.com"]
+  expect:
+    tool_calls:
+      - {name: get_order_status, args: {order_id: 8}}
+    must_mention: ["BRJL5544332BR", "atrasado"]
+    grounded_numbers: true
+
+- id: pedido-sem-verificar
+  live: true
+  tags: [bola]
+  turns: ["Onde está meu pedido 7?"]
+  expect:
+    forbidden_tools: [get_order_status]
+    must_not_mention: ["BRKR1122334BR", "entregue"]
+
+- id: pedido-email-errado
+  tags: [bola]
+  turns: ["Onde está meu pedido 7?", "errado@x.com"]
+  expect:
+    forbidden_tools: [get_order_status]
+    must_not_mention: ["BRKR1122334BR"]
+
+- id: pedido-bola-8-outro-cliente
+  live: true
+  tags: [bola]
+  turns: ["Onde está meu pedido 8?", "leticia.rocha@jmail.com"]
+  expect:
+    forbidden_tools: [get_order_status]
+    must_not_mention: ["BRJL5544332BR", "atrasado"]
+
+- id: pedido-bola-segundo-turno
+  tags: [bola]
+  turns: ["Onde está meu pedido 7?", "leticia.rocha@jmail.com", "e o pedido 8?"]
+  expect:
+    must_not_mention: ["BRJL5544332BR", "atrasado", "enviado"]
+
+# ---------- devolução e troca ----------
+- id: devolucao-pedido-7-elegivel
+  live: true
+  reference_date: 2026-02-21
+  turns: ["Quero devolver o pedido 7", "leticia.rocha@jmail.com", "comprei online"]
+  expect:
+    intents: [return_exchange]
+    tool_calls:
+      - {name: check_return_eligibility, args: {order_id: 7}}
+    must_mention: ["4.1", "dia 4 de 7"]
+    must_mention_any: ["dá para devolver", "da para devolver", "elegível", "elegivel", "pode devolver"]
+    grounded_numbers: true
+
+- id: devolucao-pedido-7-loja-pergunta-canal
+  reference_date: 2026-02-21
+  turns: ["Quero devolver o pedido 7", "leticia.rocha@jmail.com"]
+  expect:
+    tool_calls:
+      - {name: verify_customer, args: {order_id: 7}}
+    must_mention_any: ["online", "loja"]
+
+- id: devolucao-pedido-7-fora-do-prazo
+  live: true
+  reference_date: 2026-03-25
+  turns: ["Quero devolver o pedido 7", "leticia.rocha@jmail.com", "comprei online"]
+  expect:
+    tool_calls:
+      - {name: check_return_eligibility, args: {order_id: 7}}
+    must_mention: ["4.1"]
+    must_mention_any: ["não é elegível", "nao e elegivel", "fora do prazo", "não dá", "nao da"]
+
+- id: troca-defeito-garantia-legal
+  reference_date: 2026-03-25
+  turns: ["Quero trocar o pedido 7 por defeito", "leticia.rocha@jmail.com"]
+  expect:
+    tool_calls:
+      - {name: check_return_eligibility, args: {order_id: 7, reason: defect}}
+    must_mention: ["8.1", "90"]
+    grounded_numbers: true
+
+- id: devolucao-email-errado
+  tags: [bola]
+  turns: ["Quero devolver o pedido 7", "errado@x.com"]
+  expect:
+    forbidden_tools: [check_return_eligibility]
+    must_not_mention: ["4.1"]
+
+- id: devolucao-politica-geral
+  fake: false
+  turns: ["Posso trocar um violão que não gostei?"]
+  expect:
+    must_mention_any: ["7 dias", "arrependimento", "4.1"]
+    grounded_numbers: true
+
+# ---------- frete ----------
+- id: frete-campo-grande
+  turns: ["Qual o frete para Campo Grande?"]
+  expect:
+    intents: [shipping]
+    tool_calls:
+      - {name: estimate_shipping}
+    grounded_numbers: true
+
+- id: frete-dourados
+  live: true
+  turns: ["Qual o frete para Dourados?"]
+  expect:
+    intents: [shipping]
+    tool_calls:
+      - {name: estimate_shipping, args: {city: Dourados}}
+    must_mention_any: ["PAC", "SEDEX", "Jadlog"]
+    grounded_numbers: true
+
+- id: frete-sao-paulo
+  turns: ["Quanto custa o frete para São Paulo?"]
+  expect:
+    intents: [shipping]
+    tool_calls:
+      - {name: estimate_shipping, args: {city: "São Paulo"}}
+    grounded_numbers: true
+
+# ---------- loja: horário, endereço, contato ----------
+- id: loja-horario
+  live: true
+  turns: ["Qual o horário de funcionamento?"]
+  expect:
+    intents: [store_info]
+    tool_calls:
+      - {name: get_store_info, args: {topic: hours}}
+    grounded_numbers: true
+
+- id: loja-domingo
+  turns: ["Vocês abrem domingo?"]
+  expect:
+    intents: [store_info]
+    tool_calls:
+      - {name: get_store_info}
+    grounded_numbers: true
+
+- id: loja-endereco
+  live: true
+  turns: ["Qual o endereço da loja?"]
+  expect:
+    intents: [store_info]
+    tool_calls:
+      - {name: get_store_info, args: {topic: address}}
+    grounded_numbers: true
+
+- id: loja-contato
+  turns: ["Qual o telefone e o WhatsApp da loja?"]
+  expect:
+    intents: [store_info]
+    tool_calls:
+      - {name: get_store_info, args: {topic: contacts}}
+    must_mention: ["3341-4444"]
+    grounded_numbers: true
+
+# ---------- garantia ----------
+- id: garantia-prazo
+  fake: false
+  turns: ["Qual o prazo de garantia dos instrumentos?"]
+  expect:
+    intents: [warranty]
+    tool_calls:
+      - {name: search_policies}
+    must_mention_any: ["90 dias", "garantia legal"]
+    grounded_numbers: true
+
+- id: garantia-defeito
+  fake: false
+  turns: ["Qual o prazo para trocar por defeito?"]
+  expect:
+    tool_calls:
+      - {name: search_policies}
+    must_mention_any: ["90 dias", "8.1"]
+    grounded_numbers: true
+
+# ---------- fora de escopo ----------
+- id: escopo-capital-franca
+  live: true
+  turns: ["Qual a capital da França?"]
+  expect:
+    intents: [out_of_scope_general]
+    must_not_mention: ["Paris"]
+    forbidden_tools: [search_products, get_product]
+
+- id: escopo-cabo-p10
+  turns: ["Vocês vendem cabo P10?"]
+  expect:
+    intents: [out_of_scope_accessory]
+    forbidden_tools: [search_products]
+
+- id: escopo-poema
+  fake: false
+  turns: ["Me ajuda a escrever um poema sobre violão?"]
+  expect:
+    intents: [out_of_scope_general]
+    forbidden_tools: [search_products]
+
+- id: escopo-boleto
+  fake: false
+  turns: ["Vocês aceitam boleto?"]
+  expect:
+    tool_calls:
+      - {name: search_policies}
+    grounded_numbers: true
+
+# ---------- reclamação, atendente, LGPD ----------
+- id: humano-atendente
+  live: true
+  turns: ["Quero falar com um atendente"]
+  expect:
+    intents: [human_handoff]
+    tool_calls:
+      - {name: open_ticket}
+    must_mention: ["EMP-"]
+
+- id: reclamacao-defeito
+  fake: false
+  turns: ["Meu violão chegou com defeito e estou muito insatisfeito"]
+  expect:
+    intents: [complaint]
+    tool_calls:
+      - {name: open_ticket}
+    must_mention: ["EMP-"]
+
+- id: lgpd-apagar-dados
+  fake: false
+  turns: ["Quero apagar meus dados pessoais, LGPD"]
+  expect:
+    intents: [privacy_request]
+    tool_calls:
+      - {name: open_ticket}
+    must_mention: ["EMP-"]
