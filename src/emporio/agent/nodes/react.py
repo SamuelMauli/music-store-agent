@@ -74,8 +74,14 @@ def system_prompt(
 
 
 def _products_of(executions: list[ToolExecution]) -> list[dict[str, Any]]:
+    """Produtos em foco para o próximo turno; o produto detalhado (``get_product``) vem 1º.
+
+    Sem essa ordem, "ela" no turno seguinte ficava ambíguo entre o produto perguntado e os
+    itens de uma lista de promoções consultada no mesmo turno.
+    """
     refs: list[dict[str, Any]] = []
-    for execution in executions:
+    ordered = sorted(executions, key=lambda e: e.name != "get_product")
+    for execution in ordered:
         if isinstance(execution.result, Ok):
             refs.extend(
                 {"product_id": r.product_id, "name": r.name, "price": r.price}
