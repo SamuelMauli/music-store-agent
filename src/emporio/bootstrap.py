@@ -29,12 +29,114 @@ from emporio.agent.nodes.deps import Deps, VerifyPolicy
 from emporio.agent.service import ChatService
 from emporio.agent.tools import ToolRegistry, build_registry
 from emporio.clock import FixedClock, SystemClock
-from emporio.guardrails.attempts import InMemoryAttemptStore
-from emporio.guardrails.rate_limit import SlidingWindowLimiter
+from emporio.guardrails.attempts import AttemptStore, InMemoryAttemptStore, RedisAttemptStore
+from emporio.guardrails.rate_limit import RedisSlidingWindowLimiter, SlidingWindowLimiter
 from emporio.observability import Telemetry, build_telemetry
 from emporio.observability.tracing_llm import TracingLLM
-from emporio.ports import Clock, TicketRepository
+from emporio.ports import Clock, RateLimiter, TicketRepository
 from emporio.settings import Settings
+
+MISSING_POSTGRES = "state_backend=postgres exige o extra opcional: instale `emporio[postgres]`"
+MISSING_REDIS = "redis_url exige o extra opcional: instale `emporio[redis]`"
+
+
+@dataclass(slots=True)
+class SharedState:
+    """Estado escolhido por ``Settings``: checkpointer, chamados, limites e tentativas."""
+
+    checkpointer: BaseCheckpointSaver[Any]
+    tickets: TicketRepository
+    limiter: RateLimiter
+    ip_limiter: RateLimiter
+    attempts: AttemptStore
+
+
+def _postgres_state(
+    settings: Settings, closers: list[Callable[[], object]]
+) -> tuple[BaseCheckpointSaver[Any], TicketRepository]:
+    """Checkpointer e chamados em Postgres, sobre um pool único (import preguiçoso)."""
+    if settings.database_url is None:
+        raise ValueError("state_backend=postgres exige database_url (EMPORIO_DATABASE_URL)")
+    try:
+        from langgraph.checkpoint.postgres import PostgresSaver  # noqa: PLC0415
+
+        from emporio.adapters.persistence.postgres_pool import open_pool  # noqa: PLC0415
+        from emporio.adapters.persistence.postgres_tickets import (  # noqa: PLC0415
+            PostgresTicketRepository,
+        )
+    except ImportError as exc:
+        raise RuntimeError(MISSING_POSTGRES) from exc
+    pool = open_pool(settings.database_url.get_secret_value())
+    closers.append(pool.close)
+    saver = PostgresSaver(pool)
+    saver.setup()
+    return saver, PostgresTicketRepository(pool)
+
+
+def _sqlite_state(
+    settings: Settings, closers: list[Callable[[], object]]
+) -> tuple[BaseCheckpointSaver[Any], TicketRepository]:
+    """Checkpointer e chamados em SQLite (processo único)."""
+    if str(settings.checkpoint_path) != ":memory:":
+        settings.checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+    memory = sqlite3.connect(str(settings.checkpoint_path), check_same_thread=False)
+    closers.append(memory.close)
+    sqlite_tickets = SqliteTicketRepository(settings.tickets_path)
+    closers.append(sqlite_tickets.close)
+    return SqliteSaver(memory), sqlite_tickets
+
+
+def _guard_state(
+    settings: Settings, closers: list[Callable[[], object]]
+) -> tuple[RateLimiter, RateLimiter, AttemptStore]:
+    """Limites e tentativas: Redis se ``redis_url`` existir, senão memória do processo."""
+    per_session, per_ip = settings.rate_limit_per_minute, settings.rate_limit_per_ip_per_minute
+    if settings.redis_url is None:
+        return (
+            SlidingWindowLimiter(per_session, 60.0),
+            SlidingWindowLimiter(per_ip, 60.0),
+            InMemoryAttemptStore(settings.verify_lockout_seconds),
+        )
+    try:
+        from redis import Redis  # noqa: PLC0415
+    except ImportError as exc:
+        raise RuntimeError(MISSING_REDIS) from exc
+    client: Redis = Redis.from_url(settings.redis_url.get_secret_value())
+    closers.append(client.close)
+    return (
+        RedisSlidingWindowLimiter(client, per_session, 60.0, prefix="emporio:rl:session:"),
+        RedisSlidingWindowLimiter(client, per_ip, 60.0, prefix="emporio:rl:ip:"),
+        RedisAttemptStore(client, settings.verify_lockout_seconds),
+    )
+
+
+def build_shared_state(
+    settings: Settings,
+    closers: list[Callable[[], object]],
+    *,
+    checkpointer: BaseCheckpointSaver[Any] | None = None,
+    tickets: TicketRepository | None = None,
+) -> SharedState:
+    """Escolhe os adaptadores de estado conforme ``state_backend`` e ``redis_url``.
+
+    Args:
+        settings: Configuração.
+        closers: Lista que recebe o fechamento de cada recurso aberto (pool, conexões).
+        checkpointer: Substitui o checkpointer escolhido (testes).
+        tickets: Substitui o repositório de chamados escolhido (testes).
+
+    Returns:
+        Estado pronto para o grafo e o ``ChatService``.
+    """
+    if settings.state_backend == "postgres":
+        if checkpointer is None or tickets is None:
+            default_saver, default_tickets = _postgres_state(settings, closers)
+            checkpointer, tickets = checkpointer or default_saver, tickets or default_tickets
+    elif checkpointer is None or tickets is None:
+        default_saver, default_tickets = _sqlite_state(settings, closers)
+        checkpointer, tickets = checkpointer or default_saver, tickets or default_tickets
+    limiter, ip_limiter, attempts = _guard_state(settings, closers)
+    return SharedState(checkpointer, tickets, limiter, ip_limiter, attempts)
 
 
 @dataclass(slots=True)
@@ -71,8 +173,8 @@ def build_container(
         settings: Configuração.
         llm: Provedor já pronto (testes); default vem de ``settings``.
         clock: Relógio; default é o fixo de ``reference_datetime`` ou o do sistema.
-        checkpointer: Memória por sessão; default é SQLite em ``checkpoint_path``.
-        tickets: Repositório de chamados; default é SQLite em ``tickets_path``.
+        checkpointer: Memória por sessão; default segue ``state_backend`` (SQLite ou Postgres).
+        tickets: Repositório de chamados; default segue ``state_backend``.
         wall: Relógio de parede (epoch) da validade da verificação; default ``time.time``.
         telemetry: Tracing; default vem de ``settings.otel_exporter`` (``none`` = no-op).
 
@@ -90,17 +192,14 @@ def build_container(
     sections = DuckDbPolicySectionRepository(connection).all()
     retriever = retriever_factory.build(settings, sections)
     closers: list[Callable[[], object]] = []
-    if tickets is None:
-        sqlite_tickets = SqliteTicketRepository(settings.tickets_path)
-        closers.append(sqlite_tickets.close)
-        tickets = sqlite_tickets
+    state = build_shared_state(settings, closers, checkpointer=checkpointer, tickets=tickets)
     registry = build_registry(
         products=DuckDbProductRepository(connection),
         orders=DuckDbOrderRepository(connection),
         customers=DuckDbCustomerRepository(connection),
         promotions=DuckDbPromotionRepository(connection),
         retriever=retriever,
-        tickets=tickets,
+        tickets=state.tickets,
         clock=use_clock,
         metro_cities=settings.metro_cities,
         lock=lock,
@@ -111,18 +210,12 @@ def build_container(
     if telemetry.enabled:
         llm = TracingLLM(llm, telemetry, settings)
         registry.instrument(telemetry)
-    if checkpointer is None:
-        if str(settings.checkpoint_path) != ":memory:":
-            settings.checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
-        memory = sqlite3.connect(str(settings.checkpoint_path), check_same_thread=False)
-        closers.append(memory.close)
-        checkpointer = SqliteSaver(memory)
     deps = Deps(
         llm,
         registry,
         retriever,
         use_clock,
-        attempts=InMemoryAttemptStore(settings.verify_lockout_seconds),
+        attempts=state.attempts,
         wall=wall or time.time,
         verify_policy=VerifyPolicy(
             ttl_seconds=settings.verification_ttl_seconds,
@@ -130,12 +223,12 @@ def build_container(
             max_per_ip=settings.verify_max_attempts_per_ip,
         ),
     )
-    graph = build_graph(deps, checkpointer, telemetry)
+    graph = build_graph(deps, state.checkpointer, telemetry)
     return Container(
         ChatService(
             graph,
-            SlidingWindowLimiter(settings.rate_limit_per_minute, 60.0),
-            SlidingWindowLimiter(settings.rate_limit_per_ip_per_minute, 60.0),
+            state.limiter,
+            state.ip_limiter,
             telemetry,
         ),
         telemetry,

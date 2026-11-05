@@ -117,3 +117,11 @@ class TicketRepository(Protocol):
     ) -> Ticket:
         """Abre o chamado; repetir sessão + tipo + resumo devolve o mesmo protocolo."""
         ...
+
+
+class RateLimiter(Protocol):
+    """Limite de eventos por chave em janela deslizante (sessão, IP etc.)."""
+
+    def check(self, key: str) -> None:
+        """Registra o evento ou levanta ``RateLimitedError`` com ``retry_after`` em segundos."""
+        ...

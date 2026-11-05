@@ -16,9 +16,9 @@ from emporio.agent.llm.types import Usage
 from emporio.agent.prompts import prompt_hash
 from emporio.agent.state import ChatState
 from emporio.domain.pii import mask_pii
-from emporio.guardrails.rate_limit import SlidingWindowLimiter
 from emporio.observability.telemetry import NOOP, Telemetry, attributes_of
 from emporio.observability.usage import UsageAccumulator
+from emporio.ports import RateLimiter
 
 RECURSION_LIMIT = 25
 log = logging.getLogger("emporio.chat")
@@ -49,8 +49,8 @@ class ChatService:
     def __init__(
         self,
         graph: CompiledChat,
-        limiter: SlidingWindowLimiter | None = None,
-        ip_limiter: SlidingWindowLimiter | None = None,
+        limiter: RateLimiter | None = None,
+        ip_limiter: RateLimiter | None = None,
         telemetry: Telemetry = NOOP,
         usage: UsageAccumulator | None = None,
     ) -> None:
