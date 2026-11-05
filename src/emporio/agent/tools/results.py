@@ -26,10 +26,12 @@ class ProductRef:
     Attributes:
         product_id: Identificador do produto.
         name: Nome comercial.
+        price: Preço que o cliente paga, já formatado (resolve "o mais barato").
     """
 
     product_id: int
     name: str
+    price: str = ""
 
 
 @dataclass(frozen=True, slots=True)

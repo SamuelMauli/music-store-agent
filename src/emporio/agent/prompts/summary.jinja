@@ -1,0 +1,10 @@
+RESUMO DE CONVERSA. Atualize o resumo abaixo incorporando as novas mensagens.
+Mantenha em até 6 linhas: o que o cliente quer, produtos e pedidos citados (só números e
+modelos), decisões e pendências. Nunca inclua e-mail, telefone, CPF ou endereço.
+{% if previous %}
+Resumo anterior:
+{{ previous }}
+{% endif %}
+Novas mensagens:
+{% for m in messages %}{{ "Cliente" if m.role == "user" else "Tom" }}: {{ m.content }}
+{% endfor %}

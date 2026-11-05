@@ -24,7 +24,7 @@ _PATTERNS: Final = (
     (8, r"\b(violino|violinos|violoncelo|violoncelos|cello|contrabaixo|contrabaixos|violas?)\b"),
     (6, r"\b(flautas?|clarinetes?|saxofones?|saxes?|sax|oboes?|madeiras?)\b"),
     (7, r"\b(trompetes?|trombones?|tubas?|trompas?|metais|metal)\b"),
-    (9, r"\b(ukuleles?|ukeleles?|ukulelês)\b"),
+    (9, r"\b(ukuleles?|ukeleles?)\b"),
     (3, r"\b(baterias?|percussao|cajon|cajons)\b"),
     (4, r"\b(teclados?|pianos?|sintetizadores?|controladores?)\b"),
     (5, r"\b(violao|violoes)\b"),

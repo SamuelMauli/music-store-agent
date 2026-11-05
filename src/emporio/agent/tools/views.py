@@ -73,4 +73,4 @@ def _spec(value: str | int | bool) -> str:
 
 def ref_of(entry: CatalogEntry) -> ProductRef:
     """Referência curta do produto para a memória de "esse" e "o mais barato"."""
-    return ProductRef(entry.product.product_id, entry.product.name)
+    return ProductRef(entry.product.product_id, entry.product.name, brl(entry.effective_price))
