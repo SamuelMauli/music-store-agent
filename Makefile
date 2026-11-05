@@ -1,4 +1,4 @@
-.PHONY: setup ingest chat api test lint typecheck check eval-retrieval eval eval-replay eval-live examples
+.PHONY: docker-build compose-up compose-down setup ingest chat api test lint typecheck check eval-retrieval eval eval-replay eval-live examples
 
 setup:
 	uv sync --frozen
@@ -43,3 +43,15 @@ api:
 # transcricoes reais (EMPORIO_LLM_*) em examples/; plano gratuito: EMPORIO_EVAL_SLEEP=62 make examples
 examples:
 	uv run python -m emporio.evals.examples
+
+# imagem local (EXTRAS=all inclui provedores, postgres e redis; EXTRAS=postgres para enxuta)
+docker-build:
+	docker build --build-arg EXTRAS=$(or $(EXTRAS),all) -t emporio-api:local .
+
+# stack completa (api+postgres+redis+otel); requer deploy/.env (cp deploy/.env.example deploy/.env)
+# com Jaeger: make compose-up PROFILE=observability
+compose-up:
+	docker compose -f deploy/docker-compose.yml --env-file deploy/.env $(if $(PROFILE),--profile $(PROFILE)) up -d --build
+
+compose-down:
+	docker compose -f deploy/docker-compose.yml --env-file deploy/.env $(if $(PROFILE),--profile $(PROFILE)) down
