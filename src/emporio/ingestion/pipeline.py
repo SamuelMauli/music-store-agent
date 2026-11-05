@@ -8,6 +8,7 @@ from typing import Any
 import duckdb
 
 from emporio.ingestion.bronze import load_bronze
+from emporio.ingestion.gold import build_gold
 from emporio.ingestion.quality import build_quality_report, write_quality_report
 from emporio.ingestion.silver import TableResult, build_silver
 from emporio.ports import Clock
@@ -47,6 +48,7 @@ def run_pipeline(settings: Settings, clock: Clock) -> IngestionResult:
     try:
         bronze = load_bronze(con, settings.raw_dir, clock.now())
         silver = build_silver(con, settings.contracts_dir)
+        build_gold(con)
         quality = build_quality_report(con, settings.reference_datetime.date())
     finally:
         con.close()
