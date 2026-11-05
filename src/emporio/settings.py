@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
-from typing import Self
+from typing import Literal, Self
 from zoneinfo import ZoneInfo
 
 from pydantic import model_validator
@@ -25,6 +25,7 @@ class Settings(BaseSettings):
         timezone: Fuso IANA da loja.
         metro_cities: Cidades da região metropolitana de Campo Grande (§5.1); sem lista
             oficial no manual, o default é só a capital (``EMPORIO_METRO_CITIES`` em JSON).
+        policy_retriever: ``long_context`` (manual inteiro) ou ``hybrid`` (BM25 + denso + RRF).
         reference_datetime: "Agora" simulado; os dados vão de out/2025 a mar/2026.
     """
 
@@ -36,6 +37,7 @@ class Settings(BaseSettings):
     quality_report_path: Path = Path("data/quality_report.json")
     timezone: str = _STORE_TZ
     metro_cities: list[str] = ["Campo Grande"]
+    policy_retriever: Literal["long_context", "hybrid"] = "long_context"
     reference_datetime: datetime = datetime(2026, 3, 25, 10, 0, tzinfo=ZoneInfo(_STORE_TZ))
 
     @property

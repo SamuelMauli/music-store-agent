@@ -1,0 +1,35 @@
+# Perguntas de cliente rotuladas com a seção do manual que contém a resposta.
+# Uma seção correta por pergunta; recall@3 = a correta está entre as 3 primeiras.
+- {q: "Que horas a loja abre no sábado?", section: "2"}
+- {q: "Vocês abrem aos domingos e feriados?", section: "2"}
+- {q: "Qual o horário de funcionamento durante a semana?", section: "2"}
+- {q: "Aceita PIX? Tem desconto?", section: "3"}
+- {q: "Posso pagar no cartão de crédito ou boleto?", section: "3"}
+- {q: "Em quantas vezes posso parcelar?", section: "3.1"}
+- {q: "Qual o valor mínimo da parcela?", section: "3.1"}
+- {q: "Posso dividir a compra entre PIX e cartão?", section: "3.1"}
+- {q: "Comprei pelo site e me arrependi, posso devolver?", section: "4.1"}
+- {q: "Em quanto tempo recebo o estorno da devolução?", section: "4.1"}
+- {q: "Quero desistir da compra online, qual o prazo?", section: "4.1"}
+- {q: "O produto veio com defeito, como troco?", section: "4.2"}
+- {q: "Minha guitarra quebrou, não funciona mais", section: "4.2"}
+- {q: "Quero trocar de cor porque não gostei do modelo", section: "4.3"}
+- {q: "Dá para trocar o tamanho depois de comprar?", section: "4.3"}
+- {q: "Quais itens não podem ser trocados?", section: "4.4"}
+- {q: "Cordas e palhetas têm troca?", section: "4.4"}
+- {q: "A partir de quanto o frete é grátis?", section: "5.1"}
+- {q: "Quanto custa a entrega de motoboy em Campo Grande?", section: "5.1"}
+- {q: "Vocês entregam em outra cidade? Quais os prazos do SEDEX?", section: "5.2"}
+- {q: "Entrega por PAC ou Jadlog para outro estado", section: "5.2"}
+- {q: "Como rastrear meu pedido?", section: "5.3"}
+- {q: "Onde está meu pedido? Quero o código de rastreio", section: "5.3"}
+- {q: "Quais promoções vocês fazem? Tem Black Friday?", section: "6.1"}
+- {q: "Posso somar duas promoções no mesmo produto?", section: "6.2"}
+- {q: "Qual o tom de voz do atendimento no WhatsApp?", section: "7.1"}
+- {q: "Quais são as etapas do atendimento padrão?", section: "7.2"}
+- {q: "O produto está esgotado, o que acontece?", section: "7.3"}
+- {q: "Qual o prazo da garantia legal?", section: "8.1"}
+- {q: "O que a garantia do fabricante cobre?", section: "8.2"}
+- {q: "A garantia cobre desgaste e mau uso?", section: "8.3"}
+- {q: "Como a loja trata meus dados pessoais? LGPD", section: "9"}
+- {q: "Qual o endereço e o CNPJ da loja?", section: "1.2"}

@@ -37,3 +37,27 @@ class PolicySection:
         """Texto indexado: hierarquia, palavras-chave e corpo."""
         parts = (self.breadcrumb, " ".join(self.keywords), self.text)
         return "\n".join(part for part in parts if part)
+
+
+@dataclass(frozen=True, slots=True)
+class PolicySnippet:
+    """Trecho de política entregue ao agente, com a citação embutida.
+
+    Attributes:
+        section_id: Numeração da seção de origem.
+        title: Título da seção.
+        text: Corpo da seção.
+    """
+
+    section_id: str
+    title: str
+    text: str
+
+    @classmethod
+    def from_section(cls, section: PolicySection) -> PolicySnippet:
+        """Converte uma seção em trecho citável."""
+        return cls(section.section_id, section.title, section.text)
+
+    def formatted(self) -> str:
+        """Formato de citação do contrato: ``[§4.1 Título] texto``."""
+        return f"[§{self.section_id} {self.title}] {self.text}"

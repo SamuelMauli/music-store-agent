@@ -1,4 +1,4 @@
-.PHONY: setup ingest test lint typecheck check
+.PHONY: setup ingest test lint typecheck check eval-retrieval
 
 setup:
 	uv sync --frozen
@@ -17,3 +17,6 @@ typecheck:
 	uv run mypy --strict src
 
 check: lint typecheck test
+
+eval-retrieval:
+	uv run python -m emporio.evals_retrieval

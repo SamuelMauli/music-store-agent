@@ -5,8 +5,12 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Protocol
 
+import numpy as np
+from numpy.typing import NDArray
+
 from emporio.domain.entities import CatalogEntry, Customer, Order, Promotion
 from emporio.domain.lookup import NameLookup
+from emporio.domain.policy import PolicySnippet
 from emporio.domain.specifications import Specification
 from emporio.domain.value_objects import Email, OrderId
 
@@ -68,4 +72,32 @@ class PromotionRepository(Protocol):
 
     def for_product(self, product_id: int) -> list[Promotion]:
         """Todas as promoções do produto (ativas ou não), ordenadas por ID."""
+        ...
+
+
+class PolicyRetriever(Protocol):
+    """Estratégia de recuperação de trechos do manual (Strategy)."""
+
+    def retrieve(self, query: str, k: int = 3) -> list[PolicySnippet]:
+        """Trechos relevantes à pergunta, do mais ao menos relevante."""
+        ...
+
+
+class Embedder(Protocol):
+    """Transforma textos em vetores densos de norma 1."""
+
+    def embed(self, texts: list[str]) -> NDArray[np.float32]:
+        """Matriz ``(len(texts), dim)`` normalizada em L2."""
+        ...
+
+
+class VectorIndex(Protocol):
+    """Índice de vetores por similaridade de cosseno."""
+
+    def add(self, ids: list[str], vectors: NDArray[np.float32]) -> None:
+        """Indexa ``vectors`` (norma 1) sob os ``ids``."""
+        ...
+
+    def search(self, vector: NDArray[np.float32], k: int) -> list[tuple[str, float]]:
+        """Os ``k`` ids mais próximos com a similaridade, do maior ao menor."""
         ...
