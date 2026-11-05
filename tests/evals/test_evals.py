@@ -408,8 +408,13 @@ def test_fresh_failure_still_fails_the_gate() -> None:
 
 
 def test_replay_with_stale_cassette_warns_and_exits_zero(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ingested: Settings,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.chdir(ROOT)
+    monkeypatch.setenv("EMPORIO_DB_PATH", str(ingested.db_path))
     code = cli.main(["--mode", "replay", "--cassette", str(tmp_path / "vazio.jsonl")])
     captured = capsys.readouterr()
     assert code == 0
