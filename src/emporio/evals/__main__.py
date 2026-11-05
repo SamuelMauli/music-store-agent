@@ -112,7 +112,7 @@ def main(argv: list[str] | None = None) -> int:
     evaluator = Evaluator(settings, options, judge_llm=judge)
     results = evaluator.run(_cases(args))
     if evaluator.skipped:
-        print(f"puladros no modo fake (fake: false): {', '.join(evaluator.skipped)}")
+        print(f"pulados no modo fake (fake: false): {', '.join(evaluator.skipped)}")
     report = build_report(results, settings, options, time.monotonic() - started)
     _print(results, report["summary"])
     out = args.out

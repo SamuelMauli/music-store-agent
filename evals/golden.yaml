@@ -64,6 +64,8 @@
     grounded_numbers: true
 
 - id: cat-iniciante-1500
+
+  live: true
   fake: false
   turns: ["Me recomende um violão para iniciante até R$ 1.500"]
   expect:
@@ -72,6 +74,8 @@
     grounded_numbers: true
 
 - id: cat-comparar-yamaha
+
+  live: true
   fake: false
   turns: ["Compare o Yamaha C40 com o Yamaha C70"]
   expect:
@@ -136,6 +140,8 @@
     grounded_numbers: true
 
 - id: prod-sem-estoque
+
+  live: true
   fake: false
   turns: ["Tem o Giannini GF-3D Dreadnought Sunburst?"]
   expect:
@@ -145,6 +151,8 @@
     grounded_numbers: true
 
 - id: prod-descontinuado
+
+  live: true
   fake: false
   turns: ["Ainda vendem o Shelby SN-7C de 7 cordas?"]
   expect:
@@ -154,6 +162,8 @@
     grounded_numbers: true
 
 - id: prod-parcelamento-regras
+
+  live: true
   fake: false
   turns: ["Quais as regras de parcelamento da loja?"]
   expect:
@@ -191,6 +201,8 @@
     grounded_numbers: true
 
 - id: promo-takamine-nao-vigente
+
+  live: true
   fake: false
   turns: ["O Takamine GD20 ainda está com 12% de desconto?"]
   expect:
@@ -201,6 +213,8 @@
     grounded_numbers: true
 
 - id: promo-taylor
+
+  live: true
   fake: false
   turns: ["Qual o preço do Taylor 110e com a promoção?"]
   expect:
@@ -287,7 +301,7 @@
     tool_calls:
       - {name: check_return_eligibility, args: {order_id: 7}}
     must_mention: ["4.1"]
-    must_mention_any: ["não é elegível", "nao e elegivel", "fora do prazo", "não dá", "nao da"]
+    must_mention_any: ["não é elegível", "nao e elegivel", "fora do prazo", "não dá", "nao da", "não pode ser devolvido", "nao pode ser devolvido"]
 
 - id: troca-defeito-garantia-legal
   reference_date: 2026-03-25
@@ -306,6 +320,8 @@
     must_not_mention: ["4.1"]
 
 - id: devolucao-politica-geral
+
+  live: true
   fake: false
   turns: ["Posso trocar um violão que não gostei?"]
   expect:
@@ -377,6 +393,7 @@
 
 # ---------- garantia ----------
 - id: garantia-prazo
+  live: true
   fake: false
   turns: ["Qual o prazo de garantia dos instrumentos?"]
   expect:
@@ -387,6 +404,8 @@
     grounded_numbers: true
 
 - id: garantia-defeito
+
+  live: true
   fake: false
   turns: ["Qual o prazo para trocar por defeito?"]
   expect:
@@ -411,6 +430,8 @@
     forbidden_tools: [search_products]
 
 - id: escopo-poema
+
+  live: true
   fake: false
   turns: ["Me ajuda a escrever um poema sobre violão?"]
   expect:
@@ -418,6 +439,8 @@
     forbidden_tools: [search_products]
 
 - id: escopo-boleto
+
+  live: true
   fake: false
   turns: ["Vocês aceitam boleto?"]
   expect:
@@ -436,6 +459,8 @@
     must_mention: ["EMP-"]
 
 - id: reclamacao-defeito
+
+  live: true
   fake: false
   turns: ["Meu violão chegou com defeito e estou muito insatisfeito"]
   expect:
@@ -445,6 +470,8 @@
     must_mention: ["EMP-"]
 
 - id: lgpd-apagar-dados
+
+  live: true
   fake: false
   turns: ["Quero apagar meus dados pessoais, LGPD"]
   expect:

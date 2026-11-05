@@ -29,8 +29,7 @@ ASK_BOTH: Final = (
     "usado no cadastro. Pode me passar?"
 )
 ASK_CONTACT: Final = (
-    "Obrigado! Agora preciso do e-mail ou do telefone cadastrado na compra, "
-    "para confirmar que o pedido é seu."
+    "Para confirmar que o pedido é seu, preciso do e-mail ou do telefone cadastrado na compra."
 )
 ASK_ORDER: Final = "Qual é o número do pedido?"
 RETRY: Final = (
