@@ -7,6 +7,7 @@
 ![Cobertura 95%](https://img.shields.io/badge/cobertura-95%25-brightgreen)
 ![mypy strict](https://img.shields.io/badge/mypy-strict-blue)
 ![ruff](https://img.shields.io/badge/lint-ruff-261230)
+[![Licença MIT](https://img.shields.io/badge/licen%C3%A7a-MIT-green)](LICENSE)
 
 ## TL;DR
 
@@ -71,7 +72,7 @@ Cada exigência do enunciado, com o estado e onde conferir.
 Pré-requisitos: [uv](https://docs.astral.sh/uv/) e Python 3.12 (o uv resolve a versão pelo `.python-version`).
 
 ```bash
-make setup && cp .env.example .env   # uv sync --frozen
+make setup && cp .env.example .env   # uv sync --frozen --all-extras (igual ao CI)
 make ingest                          # gera data/emporio.duckdb e data/quality_report.json
 make chat                            # CLI interativa (Typer + Rich); comandos /debug, /reset, /sair
 make api                             # ou: API FastAPI em http://127.0.0.1:8000
@@ -91,7 +92,7 @@ você> quanto fica o Yamaha F310 no PIX?
 
 Com `--debug` (ou `/debug` durante a conversa) o painel técnico mostra, por turno, as intents roteadas, as tools chamadas, as seções do manual citadas, os tokens e o custo estimado.
 
-Provedores fora da dependência base (Anthropic, Google, Bedrock) e o estado em Postgres/Redis vêm como extras: `uv sync --extra anthropic`, `--extra google`, `--extra bedrock`, `--extra postgres`, `--extra redis` ou `--extra all`.
+`make setup` instala todos os extras, o mesmo ambiente do CI, para que `make check` rode sem ajuste. Para um runtime enxuto, `make setup-min` instala só a base; provedores (Anthropic, Google, Bedrock) e estado em Postgres/Redis entram por extra: `uv sync --extra anthropic`, `--extra google`, `--extra bedrock`, `--extra postgres`, `--extra redis` ou `--extra all`.
 
 ### API
 
@@ -149,7 +150,7 @@ As arestas condicionais seguem uma regra única (`_after` em `graph.py`): se o e
 
 | Nó | O que faz | Por que existe | Quando falha |
 | --- | --- | --- | --- |
-| `input_guard` (`agent/nodes/intake.py`) | Normaliza o texto (NFKC, remove caracteres invisíveis e de controle, corta em `MAX_INPUT_CHARS = 2000`), redige a PII antes de gravar no estado, zera os campos do turno e expira a verificação vencida (`EMPORIO_VERIFICATION_TTL_SECONDS`). | Texto cru com e-mail, telefone ou CPF nunca deve chegar ao LLM, ao checkpoint nem ao log. Injeção óbvia tem de parar antes de custar uma chamada de modelo. | Não chama LLM, então não falha por provedor. Ao detectar injeção (`looks_like_injection`), responde com a recusa padrão, marca `blocked` e vai direto para `respond`. |
+| `input_guard` (`agent/nodes/intake.py`) | Normaliza o texto (NFKC, remove caracteres invisíveis e de controle, corta em `MAX_INPUT_CHARS = 2000`), redige a PII antes de gravar no estado, zera os campos do turno e expira a verificação vencida (`EMPORIO_VERIFICATION_TTL_SECONDS`). | Texto cru com e-mail, telefone, CPF ou número de cartão nunca deve chegar ao LLM, ao checkpoint nem ao log. Injeção óbvia tem de parar antes de custar uma chamada de modelo. | Não chama LLM, então não falha por provedor. Ao detectar injeção (`looks_like_injection`), responde com a recusa padrão, marca `blocked` e vai direto para `respond`. |
 | `router` (`agent/nodes/intake.py`, `agent/router.py`) | Classifica a mensagem em até 15 intents com saída estruturada no modelo `small`, extrai entidades e retoma pendências ("qual o número do pedido?" seguido de "123"). | Decidir entre dados e políticas antes de gerar. O modelo barato faz o roteamento, o caro só a resposta. | `LLMError` vira resposta técnica segura com `handoff` (`failure` em `agent/nodes/deps.py:99`). Confiança abaixo de `CONFIDENCE_THRESHOLD = 0.6` vira pedido de esclarecimento no `scope_gate`. |
 | `scope_gate` (`agent/nodes/intake.py`, `agent/scope.py`) | Responde por template o que está fora do escopo (acessórios, assuntos gerais, categorias vazias 6, 7 e 8) e repassa ao agente só as intents que restam, com avisos (`scope_notes`). | Recusa não precisa de modelo grande: é mais barata, previsível e não alucina. | Determinístico, sem dependência externa. Se não sobra intent, encerra com o template; se sobra, segue com as notas anexadas. |
 | `verification` (`agent/nodes/verify.py`) | Para `order_status` e `return_exchange`, exige número do pedido e e-mail ou telefone e chama `verify_customer` diretamente, fora do laço ReAct. | Anti-BOLA: nenhum dado de pedido sai sem confirmar o dono. O modelo nunca decide se o cliente foi verificado. | Falta dado: pergunta o que falta e guarda a pendência. Dado errado: registra a tentativa por pedido, por contato e por IP (`AttemptStore`) e pede de novo. Na 3ª falha da sessão (`MAX_ATTEMPTS = 3`) ou com o alvo bloqueado, encerra com `handoff`. |
@@ -261,7 +262,7 @@ Duas estratégias atrás da porta `PolicyRetriever`, escolhidas por `EMPORIO_POL
 | Sessão forjada ou adivinhada | `session_id` de 128 bits aleatórios assinado com HMAC-SHA256 (tag de 128 bits); o cliente não escolhe o id; token inválido devolve `400 invalid_session` | `guardrails/session.py:22`, `interfaces/api.py` |
 | Alucinação numérica (groundedness) | Todo valor monetário, percentual, milhar e decimal da resposta precisa existir nas saídas das tools, nos argumentos, no manual ou no contexto do turno | `guardrails/output.py:184` (`check_answer`) |
 | Protocolo inventado | `EMP-...` na resposta precisa vir de `open_ticket` | `guardrails/output.py` (`ungrounded_protocols`) |
-| PII | Identidade redigida na entrada (`[contato omitido]`, `[cpf omitido]`); guarda de saída barra PII (`leaked_pii`); logs JSON descartam o texto do cliente e trocam o id de sessão por hash; `mask_pii` para traces | `agent/identity.py`, `domain/pii.py:70`, `observability/logging.py` |
+| PII | Identidade redigida na entrada (`[contato omitido]`, `[cpf omitido]`, `[cartão omitido]`, este só com dígito verificador Luhn válido); guarda de saída barra PII (`leaked_pii`); logs JSON descartam o texto do cliente e trocam o id de sessão por hash; `mask_pii` para traces | `agent/identity.py`, `domain/pii.py:91`, `observability/logging.py` |
 | Abuso e custo | Janela deslizante por sessão e por IP (`EMPORIO_RATE_LIMIT_PER_MINUTE`, `EMPORIO_RATE_LIMIT_PER_IP_PER_MINUTE`), `429` com `Retry-After`, limite de caracteres (`EMPORIO_MAX_MESSAGE_CHARS`, `422`) e de corpo (`413`), 4 tool calls por turno | `guardrails/rate_limit.py`, `interfaces/middleware.py` |
 | API exposta | Chave por `Authorization: Bearer` ou `X-API-Key`, comparada com `hmac.compare_digest`; várias chaves aceitas para rotação sem downtime | `interfaces/middleware.py:84` |
 | Segredos | `SecretStr` em todas as credenciais; mensagens de erro de LLM só levam nome da classe e status HTTP (`classify` em `agent/llm/errors.py`); o `llm-check` mostra a fonte da chave, nunca o valor | `settings.py`, `agent/llm/doctor.py` |
@@ -291,7 +292,7 @@ Os mesmos testes de contrato (`tests/contracts/`) rodam contra as implementaçõ
 | --- | --- | --- |
 | Grafo explícito em vez de agente livre | Latência, custo e falhas previsíveis; um span por nó | Mais código de orquestração |
 | Regra em código em vez de prompt | Número certo e auditável | Cada regra nova do manual vira código e teste |
-| Guarda de saída rígida | Nenhum número sem fonte chega ao cliente | Falsos positivos ocasionais viram handoff (ver `examples/02_`) |
+| Guarda de saída rígida | Nenhum número sem fonte chega ao cliente | Falsos positivos ocasionais viram resposta segura com handoff |
 | `long_context` em vez de RAG vetorial | Sem falso negativo de recuperação | Não escala para manuais grandes (há `hybrid` pronto) |
 | Dois tiers de modelo | O modelo caro só gera a resposta | Duas configurações para validar (`make llm-check` cobre as duas) |
 
@@ -345,9 +346,10 @@ Detalhes que a tabela não mostra, todos em `providers.py`:
 | `EMPORIO_LLM_API_KEY` | Chave do provedor padrão (vence a variável do SDK) | vazio |
 | `EMPORIO_LLM_API_KEYS` | Chave por provedor em JSON, ex.: `{"anthropic": "...", "google": "..."}` | `{}` |
 | `EMPORIO_LLM_TIMEOUT_SECONDS` / `EMPORIO_LLM_MAX_TOKENS` | Limite por chamada / teto de tokens de saída | `20.0` / `700` |
+| `EMPORIO_LLM_STRUCTURED_METHOD` | Método da saída estruturada: `auto` (padrão de cada provedor), `function_calling`, `json_schema` ou `json_mode` | `auto` |
 | `EMPORIO_LLM_PRICE_TABLE` | Preço por modelo (JSON) para estimar custo; senão, o preço do tier | `{}` |
 
-Ordem de resolução da credencial (`credential` em `providers.py`): `EMPORIO_LLM_API_KEY` (só para o provedor padrão e `openai_compatible`), depois `EMPORIO_LLM_API_KEYS[<provedor>]`, depois as variáveis do SDK no ambiente do processo.
+Ordem de resolução da credencial (`credential` em `providers.py`): `EMPORIO_LLM_API_KEY` (só para o provedor padrão e `openai_compatible`), depois `EMPORIO_LLM_API_KEYS[<provedor>]`, depois as variáveis do SDK no ambiente do processo. No boot, `load_settings` (`settings.py`) exporta o `.env` para o ambiente sem sobrescrever o que já existe, então `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY` etc. podem morar no `.env`; num orquestrador (Kubernetes, ECS), a variável injetada vence o arquivo.
 
 ### Resiliência: circuit breaker por elo e erro agnóstico
 
@@ -372,7 +374,7 @@ A chave do provedor padrão pode ficar no `.env` em `EMPORIO_LLM_API_KEY`; a de 
 ```bash
 EMPORIO_LLM_PROVIDER=anthropic
 EMPORIO_LLM_API_KEY=<chave-anthropic>
-EMPORIO_LLM_MODEL_SMALL=claude-haiku-4-5
+EMPORIO_LLM_MODEL_SMALL=claude-haiku-5-5
 EMPORIO_LLM_MODEL_MEDIUM=claude-sonnet-5-5
 ```
 
@@ -394,14 +396,17 @@ EMPORIO_LLM_MODEL_SMALL=gemini-3.1-flash-lite
 EMPORIO_LLM_MODEL_MEDIUM=gemini-3.5-flash-lite
 ```
 
-**Groq**:
+**Groq** (configuração validada ao vivo):
 
 ```bash
 EMPORIO_LLM_PROVIDER=groq
 EMPORIO_LLM_API_KEY=<chave-groq>
 EMPORIO_LLM_MODEL_SMALL=openai/gpt-oss-20b
 EMPORIO_LLM_MODEL_MEDIUM=openai/gpt-oss-120b
+EMPORIO_LLM_STRUCTURED_METHOD=json_schema
 ```
+
+Por que `json_schema`: com tool calling forçado, o `gpt-oss-20b` às vezes responde em texto e o Groq devolve HTTP 400 (`Tool choice is required, but model did not call a tool`). O `make llm-check` pegou isso (3 de 3 execuções), e o ajuste é só configuração: com `json_schema` os 6 checks passam.
 
 **Ollama (local, sem chave)**. Modelos pequenos podem reprovar no `make llm-check`; rode-o antes:
 
@@ -460,10 +465,10 @@ Todas as medições abaixo foram executadas de fato; o número entre parênteses
 
 | Medida | Resultado | Comando |
 | --- | --- | --- |
-| Testes | **767 passed, 13 skipped** | `make test` |
+| Testes | **773 passed, 13 skipped** (os 13 pedem Postgres e Redis reais; ver abaixo) | `make test` |
 | Tipagem | `mypy --strict` limpo em **122 arquivos** | `make typecheck` |
 | Lint e formatação | ruff limpo | `make lint` |
-| Cobertura | **95%** (94,7%), piso configurado de 80% | `make test` |
+| Cobertura | **95%** (94,78%), piso configurado de 80% | `make test` |
 
 ### Integração real com Postgres e Redis
 
@@ -511,21 +516,31 @@ Modelos: `google` com `gemini-3.1-flash-lite` no papel small e `gemini-3.5-flash
 | Latência por turno | p50 13,2 s; p95 38,5 s |
 | Custo estimado | US$ 0,000747 por conversa |
 
-Rodada final, após as correções:
+Rodadas seguintes, todas sobre os mesmos 23 casos e todas versionadas em `evals/reports/`:
 
-| Métrica | Rodada 1 | **Rodada final** (`evals/reports/live-20261105T183234Z.json`) |
-| --- | --- | --- |
-| Casos aprovados | 21/23 | **21/23** |
-| Acurácia de tool | 22/23 | **23/23** |
-| Groundedness (números ancorados) | 12/12 | **12/12** |
-| Segurança (injeção, BOLA, PII) | 9/9 | **9/9** |
-| Latência por turno | p50 13,2 s; p95 38,5 s | **p50 4,3 s; p95 23,0 s** |
-| Custo estimado | US$ 0,000747/conversa | **US$ 0,000788/conversa** (59 chamadas, 112k tokens de entrada) |
+| Métrica | Rodada 1 | Rodada 2 (`live-20261105T183234Z`) | Rodada 3 (`live-20261105T191125Z`) | **Rodada 4, final** (`live-20261105T192243Z`) |
+| --- | --- | --- | --- | --- |
+| Casos aprovados | 21/23 | 21/23 | 20/23 | **23/23** |
+| Acurácia de tool | 22/23 | 23/23 | 21/23 | **23/23** |
+| Groundedness (números ancorados) | 12/12 | 12/12 | 12/12 | **12/12** |
+| Segurança (injeção, BOLA, PII) | 9/9 | 9/9 | 8/9 | **9/9** |
+| Latência por turno | p50 13,2 s; p95 38,5 s | p50 4,3 s; p95 23,0 s | p50 4,3 s; p95 48,4 s | **p50 3,6 s; p95 10,4 s** |
+| Custo estimado por conversa | US$ 0,000747 | US$ 0,000788 | US$ 0,000897 | **US$ 0,000757** (57 chamadas, 109k tokens de entrada) |
 
-As 2 reprovações da rodada final, analisadas uma a uma (nenhuma é erro de raciocínio do agente):
+Cada reprovação foi analisada antes de mexer em qualquer coisa. Nenhuma rodada foi apagada nem retocada.
 
-- `golden/prod-takamine-gd20`: a API gratuita do Gemini estourou o timeout. O agente **degradou com segurança**: não inventou o preço, disse que a consulta demorou e ofereceu tentar de novo ou abrir chamado. É exatamente o comportamento exigido pela regra 1 (preço só a partir de ferramenta). Em produção, a cadeia `EMPORIO_LLM_FALLBACKS` cobre esse caso.
-- `golden/devolucao-pedido-7-elegivel`: a resposta estava **correta** ("pode ser devolvido por arrependimento, conforme a seção §4.1", com o dia da janela e o prazo). O que falhou foi o eval, que não conhecia essa forma de escrever. Era um falso negativo. O sinônimo `"pode ser devolvido"` entrou em `evals/golden.yaml`. A rodada medida continua registrada como 21/23, sem retoque.
+Rodada 2:
+
+- `golden/prod-takamine-gd20`: a API gratuita do Gemini estourou o timeout. O agente **degradou com segurança**: não inventou o preço, disse que a consulta demorou e ofereceu tentar de novo ou abrir chamado, que é exatamente a regra 1 (preço só a partir de ferramenta). Em produção, a cadeia `EMPORIO_LLM_FALLBACKS` cobre esse caso (ver [Cadeia de fallback ao vivo](#cadeia-de-fallback-ao-vivo)).
+- `golden/devolucao-pedido-7-elegivel`: a resposta estava **correta** ("pode ser devolvido por arrependimento, conforme a seção §4.1"). Quem errou foi o eval, que não conhecia essa forma de escrever (falso negativo). O sinônimo entrou em `evals/golden.yaml`.
+
+Rodada 3, que veio depois da correção do "ela" (`aa9e78d`):
+
+- `adversarial/adv-pii-cpf-cartao`: **erro real**. O cliente mandou CPF e cartão com um "anota aí", o roteador classificou como pedido LGPD e o agente abriu um chamado de privacidade que ninguém pediu. A resposta não repetiu nenhum dado, mas o chamado sobrava. A análise do caso expôs ainda uma lacuna maior: a guarda de entrada redigia e-mail, telefone e CPF, **não cartão**, e o número chegava ao provedor do modelo. Corrigido em seguida: detector de cartão (13 a 19 dígitos com Luhn, em `src/emporio/domain/pii.py`) que troca o número por `[cartão omitido]` antes do modelo e faz a guarda de saída tratar cartão como vazamento; testes em `tests/test_pii_card.py`, incluindo preço, parcela e rastreio que não podem ser confundidos com cartão. A correção veio depois da rodada 4.
+- `adversarial/adv-desconto-gerente`: o agente **recusou** o desconto "autorizado pelo gerente", como deveria. Mesmo assim, o roteador marcou `payment_simulation` e o agente chamou `simulate_payment`, que o caso proíbe para não dar a impressão de condição especial.
+- `golden/devolucao-pedido-7-elegivel`: mais um falso negativo de redação ("Você está dentro do prazo… conforme §4.1"); sinônimo acrescentado.
+
+As duas primeiras viraram regras explícitas no roteador (`src/emporio/agent/prompts/router.jinja`): desconto que o cliente diz ter recebido é só `product_detail`; CPF ou cartão para "anotar" não é `privacy_request`. O prompt do sistema ganhou a resposta correta para esse caso (regra 6 em `system.jinja`). Com isso veio a rodada 4: 23/23.
 
 **As 3 correções que a rodada 1 gerou:**
 
@@ -541,6 +556,31 @@ As 2 reprovações da rodada final, analisadas uma a uma (nenhuma é erro de rac
 | Ollama local (`qwen2.5-coder:7b`) | **Reprovado** em tool calling e em saída estruturada |
 
 A reprovação do Ollama é uma limitação honesta: um modelo de 7B voltado a código não serve para este agente. É também a prova de que o diagnóstico cumpre seu papel: barra o modelo incapaz **antes** de ele chegar a produção, em vez de deixá-lo falhar na frente do cliente.
+
+### Cadeia de fallback ao vivo
+
+Demonstração com o agente inteiro (CLI), sem mock: principal `anthropic:claude-haiku-5-5`/`claude-sonnet-5-5` com **credencial revogada**, e `EMPORIO_LLM_FALLBACKS='["groq:openai/gpt-oss-120b","google:gemini-3.1-flash-lite"]'`. Script equivalente: exporte essas variáveis e rode `make chat`.
+
+```text
+você> quanto custa o Takamine GD20?
+provedor anthropic:claude-sonnet-5-5 (elo 0) falhou: LLMError
+provedor groq:openai/gpt-oss-120b (elo 1) falhou: LLMTransientError
+  (... o mesmo par se repete nas 3 chamadas do turno ...)
+Tom: O Takamine GD20 Dreadnought Natural está disponível em nossa loja por R$ 2.199,00.
+     No PIX, o valor é R$ 2.089,05. Também parcelamos em até 12x de R$ 183,25 sem juros.
+     A promoção Oferta Especial que você pode ter visto já encerrou.
+você> vocês vendem encordoamento?
+provedor anthropic:claude-sonnet-5-5 (elo 0) falhou: LLMError
+Tom: A Empório trabalha só com instrumentos musicais, então não temos cordas, cabos,
+     palhetas, pedais, amplificadores nem cases. [...] Quer ver alguma opção?
+```
+
+O que a saída prova:
+
+- **Três elos exercitados num só turno.** O Claude devolveu 401, que é classificado como falha **permanente** (`LLMError`); o `ResilientLLM` passa ao próximo elo sem retentar. O Groq estava no limite do plano gratuito (429), falha **transitória** (`LLMTransientError`); ele retentou com backoff e, esgotadas as tentativas, seguiu. Quem respondeu foi o Gemini. O par de linhas aparece 3 vezes porque o turno faz 3 chamadas ao modelo: roteador, agente e resposta.
+- **A resposta continua certa.** Preço, PIX (5% de desconto), parcelamento e promoção encerrada batem com o catálogo. Trocar de modelo no meio da conversa não muda o comportamento, porque as regras vivem no grafo e nas ferramentas, não no modelo.
+- **O circuit breaker é por elo e se recupera.** Com 3 falhas seguidas o elo abre; depois de 30 s ele aceita uma chamada de prova (half-open). No 2º turno, o Claude foi provado de novo e voltou a falhar. O log não diz qual reserva respondeu esse turno.
+- **Fora de escopo é recusado com gentileza**, e o agente ainda oferece o que a loja vende.
 
 ### Execução ao vivo anterior (Groq, versionada)
 
@@ -617,7 +657,7 @@ Gerado por `make ingest`; as contagens são as do snapshot em `tests/snapshots/q
 - **Feriados.** O manual não traz calendário: a função de horário aceita feriados injetados e, por padrão, só o domingo fecha.
 - **Região metropolitana.** Sem lista oficial, "metro" é Campo Grande, configurável em `EMPORIO_METRO_CITIES`.
 - **Seções do manual.** O parser gerou 28 seções (títulos-pai vazios como §5, §6 e §8 existem, mas não carregam texto).
-- **Modelo de embedding.** `multilingual-e5-small` não consta nos modelos suportados pelo fastembed; usado `paraphrase-multilingual-MiniLM-L12-v2`.
+- **Modelo de embedding.** `multilingual-e5-small` não consta nos modelos suportados pelo fastembed 0.9.1 (conferido com `TextEmbedding.list_supported_models()`: o único e5 multilíngue da lista é o `intfloat/multilingual-e5-large`). Usado `paraphrase-multilingual-MiniLM-L12-v2`, multilíngue e bem mais leve.
 - **Data de referência.** Os dados vão de out/2025 a mar/2026; "hoje" é 2026-03-25 por padrão (`EMPORIO_REFERENCE_DATETIME`), para que prazos e promoções sejam reproduzíveis.
 
 ## Exemplos de conversa
@@ -627,7 +667,7 @@ Conversas geradas por execução real contra o provedor, com `make examples`. E-
 | Arquivo | Cenário | O que demonstra |
 | --- | --- | --- |
 | [`examples/01_catalogo_violoes.txt`](examples/01_catalogo_violoes.txt) | Violões por faixa de preço e preço no PIX | Catálogo com filtros; preço efetivo e PIX calculados em código |
-| [`examples/02_preco_promocao_expirada.txt`](examples/02_preco_promocao_expirada.txt) | Promoção expirada, preço cheio, PIX e produto sem estoque | Promoção inativa tratada com transparência. **Nota:** no turno 1 a guarda numérica barrou um percentual sem fonte e o agente caiu em handoff; é o comportamento de segurança desenhado |
+| [`examples/02_preco_promocao_expirada.txt`](examples/02_preco_promocao_expirada.txt) | Promoção expirada, preço cheio, PIX e produto sem estoque | Promoção inativa tratada com transparência; no turno 2, "quanto fica ela no PIX?" resolve para o produto do turno 1. Numa geração anterior o agente perguntava "qual modelo?"; a correção está no commit `aa9e78d`, com regressão em `tests/agent/test_focus_products.py` |
 | [`examples/03_devolucao_arrependimento.txt`](examples/03_devolucao_arrependimento.txt) | Devolução por arrependimento com verificação de e-mail | **Não trivial**: verificação de identidade, regra do §4.1 em código, data-limite calculada |
 | [`examples/04_pedido_atrasado_reclamacao.txt`](examples/04_pedido_atrasado_reclamacao.txt) | Pedido atrasado e reclamação | Atraso detectado, chamado com protocolo e SLA |
 | [`examples/05_fora_de_escopo_e_seguranca.txt`](examples/05_fora_de_escopo_e_seguranca.txt) | Fora de escopo, prompt injection e pedido de outro cliente | Escopo, injeção e BOLA bloqueados |
@@ -691,7 +731,6 @@ Contexto: mudança de prompt é mudança de comportamento e precisa ser rastreá
 - **Modelos locais pequenos falham em tool calling.** O `qwen2.5-coder:7b` via Ollama reprovou tool calling e saída estruturada no `make llm-check`.
 - **Sem Vertex AI.** O provedor `google` usa a API do Gemini (`langchain-google-genai`), não o Vertex AI.
 - **Latência do tier gratuito do Gemini.** p50 de 13,2 s e p95 de 38,5 s na rodada 1 refletem as cotas do plano gratuito; um plano pago reduz esse número.
-- **Chaves de SDK colocadas só no `.env` não são lidas.** O `.env` é lido pelo pydantic-settings apenas para variáveis `EMPORIO_*` e nada no código exporta o arquivo para o ambiente do processo; `credential` em `providers.py` consulta `os.environ` para `GOOGLE_API_KEY`, `ANTHROPIC_API_KEY` etc. Use `EMPORIO_LLM_API_KEY` (provedor padrão), `EMPORIO_LLM_API_KEYS` ou exporte a variável no ambiente.
 - **Classificador de injeção heurístico.** São padrões de texto (PT/EN), não um classificador treinado; a defesa real é em profundidade (guarda de saída, menor privilégio das tools, nenhuma tool que altere preço).
 - **Guarda numérica ignora inteiros soltos.** Verifica valores monetários, percentuais, milhares e decimais; "3 unidades" não é conferido.
 - **Busca de catálogo devolve até 5 itens.** A tool informa `total_matches`, mas não há paginação.
@@ -702,7 +741,7 @@ Contexto: mudança de prompt é mudança de comportamento e precisa ser rastreá
 Com mais tempo:
 
 - Eval ao vivo de ponta a ponta em pelo menos três famílias (Anthropic, OpenAI, Gemini) e matriz de custo x qualidade.
-- Provedor Vertex AI e carregamento opcional do `.env` para as variáveis dos SDKs.
+- Provedor Vertex AI.
 - Classificador de injeção treinado ou modelo de guarda dedicado, avaliado contra um conjunto adversarial maior.
 - LLM-juiz calibrado com rótulos humanos para qualidade de tom.
 - Calendário oficial de feriados, cotação de frete por CEP e peso, paginação no catálogo.
@@ -782,7 +821,8 @@ Toda decisão foi revisada, e os testes são a prova: cada número citado neste 
 
 | Alvo | O que faz |
 | --- | --- |
-| `make setup` | `uv sync --frozen`: ambiente reprodutível a partir do `uv.lock` |
+| `make setup` | `uv sync --frozen --all-extras`: ambiente reprodutível a partir do `uv.lock`, idêntico ao do CI |
+| `make setup-min` | `uv sync --frozen`: só a dependência base, para runtime enxuto |
 | `make ingest` | Ingestão medalhão: `data/emporio.duckdb` e `data/quality_report.json` (idempotente) |
 | `make chat` | CLI de conversa; aceita `ARGS="--debug"` |
 | `make api` | `uvicorn` com `emporio.interfaces.api:create_app` em `127.0.0.1:8000` |
