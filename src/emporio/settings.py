@@ -19,6 +19,7 @@ LLMProviderName = Literal[
     "azure_openai",
     "anthropic",
     "google",
+    "vertex",
     "bedrock",
     "groq",
     "ollama",

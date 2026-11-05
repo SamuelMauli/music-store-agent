@@ -1,0 +1,113 @@
+{
+  "families": {
+    "anthropic": {
+      "latest": {
+        "family": "anthropic",
+        "report": "live-claude-20261105T195449Z.json",
+        "generated_at": "2026-11-05T19:58:01+00:00",
+        "prompt_hash": "f59c6ef1b913",
+        "router_model": "anthropic:claude-haiku-5-5",
+        "answer_model": "anthropic:claude-sonnet-5-5",
+        "cases": 23,
+        "passed": 21,
+        "stale": 0,
+        "tool_accuracy": 1.0,
+        "groundedness": 1.0,
+        "security": 0.8889,
+        "p50_ms": 3958,
+        "p95_ms": 12454,
+        "cost_per_conversation_usd": 0.001417,
+        "cost_total_usd": 0.0326,
+        "usd_per_passed_case": 0.001552
+      },
+      "history": []
+    },
+    "google": {
+      "latest": {
+        "family": "google",
+        "report": "live-20261105T192243Z.json",
+        "generated_at": "2026-11-05T19:22:43+00:00",
+        "prompt_hash": "f59c6ef1b913",
+        "router_model": "google:gemini-3.1-flash-lite",
+        "answer_model": "google:gemini-3.5-flash-lite",
+        "cases": 23,
+        "passed": 23,
+        "stale": 0,
+        "tool_accuracy": 1.0,
+        "groundedness": 1.0,
+        "security": 1.0,
+        "p50_ms": 3574,
+        "p95_ms": 10376,
+        "cost_per_conversation_usd": 0.000757,
+        "cost_total_usd": 0.017421,
+        "usd_per_passed_case": 0.000757
+      },
+      "history": [
+        {
+          "family": "google",
+          "report": "live-20261105T191125Z.json",
+          "generated_at": "2026-11-05T19:11:25+00:00",
+          "prompt_hash": "a2487357d751",
+          "router_model": "google:gemini-3.1-flash-lite",
+          "answer_model": "google:gemini-3.5-flash-lite",
+          "cases": 23,
+          "passed": 20,
+          "stale": 0,
+          "tool_accuracy": 0.913,
+          "groundedness": 1.0,
+          "security": 0.8889,
+          "p50_ms": 4299,
+          "p95_ms": 48356,
+          "cost_per_conversation_usd": 0.000897,
+          "cost_total_usd": 0.020642,
+          "usd_per_passed_case": 0.001032
+        },
+        {
+          "family": "google",
+          "report": "live-20261105T183234Z.json",
+          "generated_at": "2026-11-05T18:32:34+00:00",
+          "prompt_hash": "5b96609ccb65",
+          "router_model": "google:gemini-3.1-flash-lite",
+          "answer_model": "google:gemini-3.5-flash-lite",
+          "cases": 23,
+          "passed": 21,
+          "stale": 0,
+          "tool_accuracy": 1.0,
+          "groundedness": 1.0,
+          "security": 1.0,
+          "p50_ms": 4332,
+          "p95_ms": 23003,
+          "cost_per_conversation_usd": 0.000788,
+          "cost_total_usd": 0.018124,
+          "usd_per_passed_case": 0.000863
+        }
+      ]
+    },
+    "groq": {
+      "latest": {
+        "family": "groq",
+        "report": "live-20261105T141653Z.json",
+        "generated_at": "2026-11-05T14:16:53+00:00",
+        "prompt_hash": "5e0eaf74541f",
+        "router_model": "openai/gpt-oss-20b",
+        "answer_model": "openai/gpt-oss-120b",
+        "cases": 23,
+        "passed": 20,
+        "stale": 0,
+        "tool_accuracy": 0.913,
+        "groundedness": 1.0,
+        "security": 1.0,
+        "p50_ms": 1970,
+        "p95_ms": 38531,
+        "cost_per_conversation_usd": 0.000711,
+        "cost_total_usd": 0.016352,
+        "usd_per_passed_case": 0.000818
+      },
+      "history": []
+    }
+  },
+  "not_run": {
+    "openai": "not run (no API key)"
+  },
+  "note": "valores copiados dos relatórios ao vivo; prompt_hash = versão do código/prompt gravada no relatório; US$/caso aprovado = cost_total / casos aprovados; famílias com prompt_hash diferente rodaram versões diferentes do código, a comparação entre elas é aproximada"
+}

@@ -5,10 +5,13 @@ from __future__ import annotations
 import importlib
 from typing import Any, get_args
 
+import google.auth
 import pytest
+from google.auth.credentials import AnonymousCredentials
 from langchain_anthropic import ChatAnthropic
 from langchain_aws import ChatBedrockConverse
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_google_vertexai import ChatVertexAI
 from langchain_openai import AzureChatOpenAI, ChatOpenAI
 from pydantic import SecretStr
 
@@ -41,6 +44,8 @@ SDK_ENVS = (
     "AZURE_OPENAI_API_VERSION",
     "OPENAI_API_VERSION",
     "AWS_REGION",
+    "GOOGLE_CLOUD_PROJECT",
+    "GOOGLE_CLOUD_LOCATION",
 )
 
 
@@ -223,6 +228,34 @@ def test_google_builds_gemini(monkeypatch: pytest.MonkeyPatch, env: str) -> None
     assert (chat.max_output_tokens, chat.max_retries, chat.timeout) == (321, 0, 20.0)
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
+def test_vertex_builds_gemini_via_adc_without_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "meu-projeto")
+    monkeypatch.setenv("GOOGLE_CLOUD_LOCATION", "southamerica-east1")
+    chat = _build("vertex:gemini-2.5-flash")
+    assert type(chat) is ChatVertexAI
+    assert chat.model_name == "gemini-2.5-flash"
+    assert (chat.project, chat.location) == ("meu-projeto", "southamerica-east1")
+    assert (chat.max_output_tokens, chat.max_retries, chat.timeout) == (321, 0, 20.0)
+    assert chat.credentials is None  # ADC: resolvida pelo SDK na 1ª chamada, nunca por chave
+    providers.validate(parse_spec("vertex:gemini-2.5-flash", "openai"), _settings())  # sem chave
+
+
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
+def test_vertex_defaults_location_and_defers_project_to_adc(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # hermético: nunca lê a ADC real da máquina de quem roda o teste
+    monkeypatch.setattr(
+        google.auth, "default", lambda *a, **k: (AnonymousCredentials(), "adc-proj")
+    )
+    chat = _build("vertex:gemini-2.5-flash")
+    assert chat.location == "us-central1"
+    assert chat.project == "adc-proj"
+    assert providers.info_for("vertex").requires_key is False
+    assert providers.info_for("vertex").hoist_system is True
+
+
 def test_bedrock_builds_converse_without_key() -> None:
     chat = _build(
         "bedrock:anthropic.claude-3-haiku-20240307-v1:0", _settings(llm_aws_region="us-east-1")
@@ -331,6 +364,7 @@ def test_missing_extra_is_reported_at_boot(monkeypatch: pytest.MonkeyPatch) -> N
     [
         ("anthropic:claude", "langchain_anthropic", "anthropic"),
         ("google:gemini", "langchain_google_genai", "google"),
+        ("vertex:gemini", "langchain_google_vertexai", "vertex"),
         ("bedrock:meta.llama3", "langchain_aws", "bedrock"),
     ],
 )

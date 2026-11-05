@@ -1,7 +1,7 @@
 """Registro de provedores de LLM: classe do LangChain, extra opcional, credencial e endpoint.
 
 Trocar de provedor é configuração (``EMPORIO_LLM_*``), não código. Os SDKs opcionais
-(Anthropic, Gemini, Bedrock) são importados só quando o provedor é usado; sem o extra
+(Anthropic, Gemini, Vertex AI, Bedrock) são importados só quando o provedor é usado; sem o extra
 instalado a mensagem diz o que instalar.
 """
 
@@ -20,12 +20,13 @@ from pydantic import SecretStr
 from emporio.agent.llm.spec import ModelSpec
 from emporio.settings import Settings
 
-Family = Literal["openai", "azure", "anthropic", "google", "bedrock", "fake"]
+Family = Literal["openai", "azure", "anthropic", "google", "vertex", "bedrock", "fake"]
 StructuredMethod = Literal["function_calling", "json_schema", "json_mode"]
 
 _LOCAL_PREFIXES = ("http://localhost", "http://127.0.0.1", "http://0.0.0.0", "http://[::1]")
 _DEFAULT_AZURE_API_VERSION = "2024-10-21"
 _NO_TEMPERATURE_PREFIXES = ("claude-haiku-5",)
+_DEFAULT_VERTEX_LOCATION = "us-central1"
 
 
 class LLMConfigError(ValueError):
@@ -90,6 +91,19 @@ REGISTRY: dict[str, ProviderInfo] = {
             extra="google",
             key_envs=("GOOGLE_API_KEY", "GEMINI_API_KEY"),
             structured_method="json_schema",
+            hoist_system=True,
+        ),
+        ProviderInfo(
+            # Gemini no Vertex AI: sem chave de API, a credencial é a ADC do Google
+            # (GOOGLE_APPLICATION_CREDENTIALS, gcloud auth ou a conta de serviço do runtime).
+            # A langchain-google-genai instalada (3.2.0) não tem modo Vertex: usa-se a
+            # langchain-google-vertexai (ChatVertexAI, marcada como depreciada upstream em
+            # favor da genai; migrar quando a genai expuser o modo Vertex).
+            "vertex",
+            "vertex",
+            module="langchain_google_vertexai",
+            extra="vertex",
+            requires_key=False,
             hoist_system=True,
         ),
         ProviderInfo(
@@ -316,6 +330,23 @@ def _google(info: ProviderInfo, spec: ModelSpec, settings: Settings, p: ChatPara
     )
 
 
+def _vertex(info: ProviderInfo, spec: ModelSpec, settings: Settings, p: ChatParams) -> Any:
+    cls = _load(info, "ChatVertexAI")
+    # Projeto e região vêm do ambiente; sem projeto, o SDK infere o da ADC.
+    extra: dict[str, Any] = {}
+    if project := os.environ.get("GOOGLE_CLOUD_PROJECT"):
+        extra["project"] = project
+    return cls(
+        model_name=spec.model,
+        location=os.environ.get("GOOGLE_CLOUD_LOCATION") or _DEFAULT_VERTEX_LOCATION,
+        temperature=p.temperature,
+        max_output_tokens=p.max_tokens,
+        timeout=p.timeout,
+        max_retries=0,
+        **extra,
+    )
+
+
 def _bedrock(info: ProviderInfo, spec: ModelSpec, settings: Settings, p: ChatParams) -> Any:
     cls = _load(info, "ChatBedrockConverse")
     region = settings.llm_aws_region or os.environ.get("AWS_REGION")
@@ -341,6 +372,7 @@ BUILDERS: dict[Family, Builder] = {
     "azure": _azure,
     "anthropic": _anthropic,
     "google": _google,
+    "vertex": _vertex,
     "bedrock": _bedrock,
     "fake": _fake,
 }
