@@ -96,7 +96,8 @@ def _needs_input(route: RouteDecision, traces: list[dict[str, Any]]) -> bool:
         return True
     e = route.entities
     called = {t["name"] for t in traces}
-    missing_city = "shipping" in route.intents and not e.city and "estimate_shipping" not in called
+    shipping_called = bool(called & {"estimate_shipping", "quote_shipping"})
+    missing_city = "shipping" in route.intents and not e.city and not shipping_called
     productless = any(
         i in route.intents for i in ("product_detail", "payment_simulation")
     ) and not (e.product_name or e.referenced_product_ids or traces)

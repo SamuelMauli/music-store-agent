@@ -21,6 +21,7 @@ from emporio.agent.tools.results import (
     ToolResult,
     Unauthorized,
 )
+from emporio.domain.calendar import DEFAULT_CALENDAR, HolidayCalendar
 from emporio.domain.entities import Order
 from emporio.domain.errors import InvalidValueError
 from emporio.domain.text import normalize_text
@@ -218,6 +219,8 @@ class ReturnView(BaseModel):
     days_left: str | None = None
     requires: list[str] = Field(default_factory=list)
     refund: str | None = None
+    refund_by: str | None = None
+    refund_note: str | None = None
     freight: str | None = None
     estimate_note: str | None = None
     detail: str = ""
@@ -235,10 +238,17 @@ class CheckReturnEligibility(Tool[CheckReturnInput, ReturnView]):
     input_model = CheckReturnInput
     requires_verified_customer = True
 
-    def __init__(self, orders: OrderRepository, products: ProductRepository, clock: Clock) -> None:
+    def __init__(
+        self,
+        orders: OrderRepository,
+        products: ProductRepository,
+        clock: Clock,
+        calendar: HolidayCalendar = DEFAULT_CALENDAR,
+    ) -> None:
         self._orders = orders
         self._products = products
         self._clock = clock
+        self._calendar = calendar
 
     def run(self, args: CheckReturnInput, ctx: ToolContext) -> ToolResult[ReturnView]:
         """Aplica as políticas de §4 com o ``Clock`` injetado."""
@@ -253,6 +263,7 @@ class CheckReturnEligibility(Tool[CheckReturnInput, ReturnView]):
             SalesChannel(args.channel) if args.channel else SalesChannel.UNKNOWN,
             self._clock.now().date(),
             self._traits(order),
+            calendar=self._calendar,
         )
         sources = (f"order:{order.order_id.value}",)
         match outcome:
@@ -294,6 +305,13 @@ def _view(decision: ReturnDecision) -> ReturnView:
         days_left=_days_left(decision),
         requires=list(decision.requires),
         refund=decision.refund,
+        refund_by=day(decision.refund_by) if decision.refund_by else None,
+        refund_note=(
+            "previsão contando os dias úteis (sem feriados nacionais) a partir de hoje; "
+            "o manual não diz de quando a contagem começa"
+            if decision.refund_by
+            else None
+        ),
         freight=decision.freight,
         estimate_note=(
             "prazo contado da entrega estimada, pois o pedido não registra a data de recebimento"

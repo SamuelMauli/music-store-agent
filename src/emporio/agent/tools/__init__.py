@@ -1,4 +1,4 @@
-"""Registro das 13 tools do agente."""
+"""Registro das 14 tools do agente."""
 
 from __future__ import annotations
 
@@ -16,7 +16,9 @@ from emporio.agent.tools.catalog import (
 from emporio.agent.tools.commerce import ListActivePromotions, SimulatePayment
 from emporio.agent.tools.info import EstimateShipping, GetStoreInfo, SearchPolicies
 from emporio.agent.tools.orders import CheckReturnEligibility, GetOrderStatus, VerifyCustomer
+from emporio.agent.tools.shipping_quote import QuoteShipping
 from emporio.agent.tools.tickets import OpenTicket
+from emporio.domain.calendar import DEFAULT_CALENDAR, HolidayCalendar
 from emporio.ports import (
     Clock,
     CustomerRepository,
@@ -39,8 +41,9 @@ def build_registry(
     clock: Clock,
     metro_cities: Collection[str],
     lock: threading.RLock | None = None,
+    calendar: HolidayCalendar = DEFAULT_CALENDAR,
 ) -> ToolRegistry:
-    """Monta o ``ToolRegistry`` com as 13 tools (composition root das tools).
+    """Monta o ``ToolRegistry`` com as 14 tools (composition root das tools).
 
     Args:
         products: Repositório do catálogo.
@@ -52,6 +55,7 @@ def build_registry(
         clock: Relógio injetado.
         metro_cities: Cidades da região metropolitana.
         lock: Trava compartilhada para acesso ao DuckDB.
+        calendar: Feriados nacionais para contar dias úteis (reembolso, prazo de entrega).
 
     Returns:
         Registro pronto para uso pelo grafo.
@@ -65,9 +69,10 @@ def build_registry(
         SimulatePayment(products),
         VerifyCustomer(orders, customers),
         GetOrderStatus(orders, products, clock),
-        CheckReturnEligibility(orders, products, clock),
+        CheckReturnEligibility(orders, products, clock, calendar),
         EstimateShipping(products, metro_cities),
-        GetStoreInfo(clock),
+        QuoteShipping(products, clock, calendar),
+        GetStoreInfo(clock, calendar),
         SearchPolicies(retriever),
         OpenTicket(tickets, clock),
     ]

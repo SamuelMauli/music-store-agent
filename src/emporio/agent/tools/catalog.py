@@ -35,6 +35,7 @@ from emporio.domain.value_objects import Money
 from emporio.ports import ProductRepository, PromotionRepository
 
 MAX_RESULTS = 5
+MAX_PAGE_SIZE = 10
 MAX_SIMILAR = 3
 ALTERNATIVE_BAND = Decimal("0.30")
 
@@ -57,6 +58,13 @@ class SearchProductsInput(BaseModel):
     )
     sort: Literal["price_asc", "price_desc"] = "price_asc"
     limit: int = Field(default=MAX_RESULTS, ge=1, le=MAX_RESULTS)
+    page: int = Field(default=1, ge=1, description="Página dos resultados, começando em 1.")
+    page_size: int | None = Field(
+        default=None,
+        ge=1,
+        le=MAX_PAGE_SIZE,
+        description="Itens por página (até 10). Sem valor, usa limit (padrão 5).",
+    )
 
 
 class SearchProductsOutput(BaseModel):
@@ -64,6 +72,9 @@ class SearchProductsOutput(BaseModel):
 
     items: list[ProductCard]
     total_matches: int
+    page: int = 1
+    total_pages: int = 0
+    has_more: bool = False
     note: str | None = None
 
 
@@ -73,8 +84,10 @@ class SearchProducts(Tool[SearchProductsInput, SearchProductsOutput]):
     name = "search_products"
     description = (
         "Use para listar ou recomendar produtos por categoria, faixa de preço, tipo de corda, "
-        "captação eletrônica ou nome. Devolve até 5 itens do mais barato ao mais caro e o total "
-        "de resultados (total_matches). Só traz produtos à venda, salvo include_unavailable. "
+        "captação eletrônica ou nome. Devolve até 5 itens por página (page_size até 10) do mais "
+        "barato ao mais caro, o total de resultados (total_matches) e page, total_pages, "
+        "has_more: se has_more for true, peça page+1 para ver mais. Só traz produtos à venda, "
+        "salvo include_unavailable. "
         "Não use para o preço de um modelo específico (use get_product)."
     )
     input_model = SearchProductsInput
@@ -103,12 +116,20 @@ class SearchProducts(Tool[SearchProductsInput, SearchProductsOutput]):
             found = [e for e in found if all(t in normalize_text(e.product.name) for t in tokens)]
         if args.sort == "price_desc":
             found = list(reversed(found))
-        shown = found[: args.limit]
+        size = args.page_size or args.limit
+        total_pages = -(-len(found) // size)
+        start = (args.page - 1) * size
+        shown = found[start : start + size]
         note = None if found else "Nenhum produto com esses filtros no catálogo."
+        if found and not shown:
+            note = f"A página {args.page} não existe: os resultados vão até a página {total_pages}."
         return Ok(
             SearchProductsOutput(
                 items=[ProductCard.from_entry(e) for e in shown],
                 total_matches=len(found),
+                page=args.page,
+                total_pages=total_pages,
+                has_more=args.page < total_pages,
                 note=note,
             ),
             sources=tuple(f"product:{e.product.product_id}" for e in shown),

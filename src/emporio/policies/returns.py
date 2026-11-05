@@ -8,6 +8,7 @@ from datetime import date, timedelta
 from enum import StrEnum
 from typing import Final, Literal
 
+from emporio.domain.calendar import DEFAULT_CALENDAR, HolidayCalendar, add_business_days
 from emporio.domain.entities import Order
 from emporio.domain.enums import OrderStatus
 
@@ -15,7 +16,8 @@ REGRET_DAYS: Final = 7
 DEFECT_DAYS: Final = 30
 PREFERENCE_DAYS: Final = 7
 LEGAL_WARRANTY_DAYS: Final = 90
-REFUND_TERMS: Final = "mesma forma de pagamento original em até 10 dias úteis"
+REFUND_BUSINESS_DAYS: Final = 10
+REFUND_TERMS: Final = f"mesma forma de pagamento original em até {REFUND_BUSINESS_DAYS} dias úteis"
 CHANNEL_QUESTION: Final = "A compra foi feita online ou na loja?"
 
 Rule = Literal["4.1", "4.2", "4.3", "4.4", "warranty"]
@@ -74,6 +76,7 @@ class ReturnDecision:
         window_days: Tamanho do prazo, em dias corridos.
         requires: Condições para aceitar o produto.
         refund: Forma e prazo do reembolso, quando aplicável.
+        refund_by: Data-limite do reembolso (10 dias úteis, §4.1) se contada da solicitação.
         freight: Quem paga o frete de devolução, quando o manual define.
         estimate_based: ``True`` se o marco inicial é a entrega *estimada* (D13).
         detail: Orientação em texto para o agente explicar ao cliente.
@@ -87,6 +90,7 @@ class ReturnDecision:
     window_days: int | None = None
     requires: tuple[str, ...] = ()
     refund: str | None = None
+    refund_by: date | None = None
     freight: str | None = None
     estimate_based: bool = False
     detail: str = ""
@@ -181,8 +185,15 @@ def _received(order: Order) -> date | ReturnNotApplicable:
     )
 
 
-def _regret(received: date, today: date, channel: SalesChannel) -> ReturnOutcome:
-    """Implementa §4.1 — Direito de Arrependimento (compras online)."""
+def _regret(
+    received: date, today: date, channel: SalesChannel, calendar: HolidayCalendar
+) -> ReturnOutcome:
+    """Implementa §4.1 — Direito de Arrependimento (compras online).
+
+    O prazo de 7 dias é CORRIDO (CDC art. 49) e não usa o calendário. O reembolso é em dias
+    ÚTEIS; o manual não diz de quando contam, então a data-limite parte de ``today`` (a
+    solicitação) e é só uma previsão: a contagem real pode começar no recebimento do produto.
+    """
     if channel is SalesChannel.UNKNOWN:
         return ChannelRequired()
     if channel is SalesChannel.STORE:
@@ -191,10 +202,14 @@ def _regret(received: date, today: date, channel: SalesChannel) -> ReturnOutcome
             rule="4.1",
             detail="o direito de arrependimento vale só para compras online (§4.1)",
         )
+    window = _window(received, today, REGRET_DAYS, "4.1")
     return replace(
-        _window(received, today, REGRET_DAYS, "4.1"),
+        window,
         requires=("embalagem original", "sem sinais de uso", "todos os acessórios e manuais"),
         refund=REFUND_TERMS,
+        refund_by=(
+            add_business_days(today, REFUND_BUSINESS_DAYS, calendar) if window.eligible else None
+        ),
         freight="por conta da loja",
         estimate_based=True,
     )
@@ -238,6 +253,8 @@ def evaluate_return(
     channel: SalesChannel,
     today: date,
     traits: Sequence[ReturnItemTraits] = (),
+    *,
+    calendar: HolidayCalendar = DEFAULT_CALENDAR,
 ) -> ReturnOutcome:
     """Decide devolução ou troca aplicando §4.1 a §4.4 e a garantia do §8.1.
 
@@ -253,6 +270,8 @@ def evaluate_return(
         channel: Canal da compra (``UNKNOWN`` gera ``ChannelRequired`` no arrependimento).
         today: Data de referência, vinda do ``Clock``.
         traits: Características dos itens do pedido, para a regra do §4.4.
+        calendar: Feriados para contar os dias úteis do reembolso (prazos de troca e
+            garantia são corridos e não o usam).
 
     Returns:
         ``ReturnDecision``, ``ChannelRequired`` ou ``ReturnNotApplicable``.
@@ -266,5 +285,5 @@ def evaluate_return(
     if excluded is not None:
         return ReturnDecision(eligible=False, rule="4.4", detail=f"não elegível: {excluded}")
     if reason is ReturnReason.REGRET:
-        return _regret(received, today, channel)
+        return _regret(received, today, channel, calendar)
     return _preference(received, today)
