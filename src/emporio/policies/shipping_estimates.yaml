@@ -1,0 +1,45 @@
+# PREMISSA DA LOJA/DESAFIO, NAO e preco nem prazo oficial dos Correios ou da Jadlog.
+# O manual (§5.2) nao traz tabela de valores: diz que o frete "e calculado automaticamente por
+# CEP, peso e dimensoes". Esta tabela e uma ESTIMATIVA configuravel para o agente dar uma ordem
+# de grandeza; os valores abaixo foram inventados com ordem de grandeza plausivel (SEDEX ~1,7x
+# PAC, Jadlog ~1,15x PAC, mais caro quanto mais longe e mais pesado). Troque pelos valores reais
+# (tabela contratada ou API dos Correios) sem mexer em codigo. Toda resposta que usa esta
+# tabela sai marcada estimate=true.
+#
+# Prazos (dias uteis) ficam dentro das faixas do manual (§5.2): PAC 5-12, SEDEX 2-5, Jadlog 3-8;
+# o carregador recusa a tabela se algum prazo sair delas.
+version: 1
+origin_uf: MS
+
+# CEPs atendidos por motoboy proprio (§5.1). Premissa: faixa de Campo Grande (79000-000 a
+# 79129-999); o manual so diz "regiao metropolitana de Campo Grande", sem lista de CEPs.
+metro_cep_ranges:
+  - [79000000, 79129999]
+
+# Limite superior de cada faixa de peso, em kg. Acima do ultimo, frete especial sem estimativa.
+weight_bands_kg: [1, 5, 10, 30]
+
+# Zona de destino: "ms" = mesma UF da loja (fora da regiao metropolitana); demais = regiao.
+# Cada zona: days = [minimo, maximo] em dias uteis; price = R$ por faixa de peso.
+modes:
+  "PAC (Correios)":
+    ms:           {days: [5, 7],   price: [22, 32, 48, 85]}
+    centro_oeste: {days: [5, 8],   price: [28, 40, 60, 105]}
+    sudeste:      {days: [6, 10],  price: [32, 46, 70, 120]}
+    sul:          {days: [6, 10],  price: [34, 49, 74, 125]}
+    nordeste:     {days: [8, 12],  price: [38, 54, 82, 140]}
+    norte:        {days: [9, 12],  price: [45, 64, 96, 165]}
+  "SEDEX (Correios)":
+    ms:           {days: [2, 3],   price: [38, 54, 82, 145]}
+    centro_oeste: {days: [2, 3],   price: [48, 68, 102, 178]}
+    sudeste:      {days: [2, 4],   price: [55, 78, 119, 204]}
+    sul:          {days: [2, 4],   price: [58, 83, 126, 212]}
+    nordeste:     {days: [3, 5],   price: [65, 92, 139, 238]}
+    norte:        {days: [4, 5],   price: [77, 109, 163, 280]}
+  "Jadlog (.package)":
+    ms:           {days: [3, 4],   price: [25, 37, 55, 98]}
+    centro_oeste: {days: [3, 5],   price: [32, 46, 69, 121]}
+    sudeste:      {days: [3, 6],   price: [37, 53, 81, 138]}
+    sul:          {days: [3, 6],   price: [39, 56, 85, 144]}
+    nordeste:     {days: [5, 8],   price: [44, 62, 94, 161]}
+    norte:        {days: [6, 8],   price: [52, 74, 110, 190]}

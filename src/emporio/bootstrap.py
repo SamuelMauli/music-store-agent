@@ -29,6 +29,7 @@ from emporio.agent.nodes.deps import Deps, VerifyPolicy
 from emporio.agent.service import ChatService
 from emporio.agent.tools import ToolRegistry, build_registry
 from emporio.clock import FixedClock, SystemClock
+from emporio.domain.calendar import HolidayCalendar
 from emporio.guardrails.attempts import AttemptStore, InMemoryAttemptStore, RedisAttemptStore
 from emporio.guardrails.rate_limit import RedisSlidingWindowLimiter, SlidingWindowLimiter
 from emporio.observability import Telemetry, build_telemetry
@@ -203,6 +204,7 @@ def build_container(
         clock=use_clock,
         metro_cities=settings.metro_cities,
         lock=lock,
+        calendar=HolidayCalendar(carnival=settings.carnival_is_holiday),
     )
     if llm is None:
         names = [r[0] for r in connection.execute("select name from silver.products").fetchall()]

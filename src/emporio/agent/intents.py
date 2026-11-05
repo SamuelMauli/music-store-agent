@@ -45,7 +45,7 @@ TOOLS_BY_INTENT: Final[dict[Intent, tuple[str, ...]]] = {
     # Sem ``open_ticket``: o chamado só nasce de pedido explícito (intent human_handoff,
     # complaint ou privacy_request) ou do nó de handoff, nunca como atalho da devolução.
     Intent.RETURN_EXCHANGE: ("verify_customer", "check_return_eligibility", "search_policies"),
-    Intent.SHIPPING: ("estimate_shipping", "get_product"),
+    Intent.SHIPPING: ("estimate_shipping", "quote_shipping", "get_product"),
     Intent.WARRANTY: ("search_policies",),
     Intent.STORE_INFO: ("get_store_info",),
     Intent.COMPLAINT: ("open_ticket",),

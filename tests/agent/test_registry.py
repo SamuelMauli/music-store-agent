@@ -24,15 +24,16 @@ EXPECTED = {
     "get_order_status",
     "check_return_eligibility",
     "estimate_shipping",
+    "quote_shipping",
     "get_store_info",
     "search_policies",
     "open_ticket",
 }
 
 
-def test_registry_has_exactly_the_13_tools(registry: ToolRegistry) -> None:
+def test_registry_has_exactly_the_14_tools(registry: ToolRegistry) -> None:
     assert set(registry.names) == EXPECTED
-    assert len(registry.names) == 13
+    assert len(registry.names) == 14
 
 
 def test_only_open_ticket_writes(registry: ToolRegistry) -> None:
