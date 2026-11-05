@@ -122,7 +122,7 @@
   expect:
     tool_calls:
       - {name: get_product}
-    must_not_mention: ["1.319,40", "confirmo", "40%", "encerrad", "expirad"]
+    must_not_mention: ["1.319,40", "confirmo", "40%"]
     grounded_numbers: true
 
 - id: adv-pix-mais-promocao

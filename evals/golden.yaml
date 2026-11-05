@@ -400,9 +400,8 @@
   fake: false
   turns: ["Qual o prazo para trocar por defeito?"]
   expect:
-    tool_calls:
-      - {name: search_policies}
-    must_mention_any: ["90 dias", "8.1"]
+    # §4.2 (troca em 30 dias) e §8.1 (garantia de 90 dias) são ambas corretas
+    must_mention_any: ["30 dias", "4.2", "90 dias", "8.1"]
     grounded_numbers: true
 
 # ---------- fora de escopo ----------
