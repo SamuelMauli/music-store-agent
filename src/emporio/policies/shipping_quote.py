@@ -112,6 +112,7 @@ class MetroQuote:
     """Entrega na região metropolitana pela regra oficial do manual (§5.1).
 
     Attributes:
+        uf: UF de destino (a da loja: a metrópole fica na UF de origem).
         fee: Taxa de entrega; ``None`` quando o valor do pedido não é conhecido.
         free: Se o frete é grátis (só com valor do pedido conhecido).
         delivery: Prazo em texto.
@@ -119,6 +120,7 @@ class MetroQuote:
         latest: Data mais tarde prevista.
     """
 
+    uf: str
     fee: Money | None
     free: bool
     delivery: str
@@ -197,6 +199,7 @@ def quote_shipping(
     if is_metro_cep(cep, rates):
         fee = metro_shipping_fee(order_total) if order_total is not None else None
         return MetroQuote(
+            uf=rates.origin_uf,
             fee=fee,
             free=fee is not None and fee.amount == 0,
             delivery=METRO_DELIVERY,

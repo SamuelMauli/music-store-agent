@@ -59,3 +59,12 @@ def test_quote_shipping_is_read_only_with_strict_schema(registry: ToolRegistry) 
     schema = registry.schemas(["quote_shipping"])[0]["function"]["parameters"]
     assert schema["additionalProperties"] is False
     assert "cep" in schema["required"]
+
+
+def test_quote_shipping_unknown_product_ids_are_not_found(call: Caller) -> None:
+    result = call("quote_shipping", cep="79002-000", product_ids=[95, 99999, 88888])
+    assert isinstance(result.result, NotFound)
+    assert "99999, 88888" in result.result.hint
+    assert "95" not in result.result.hint
+    # order_total informado dispensa os ids: não há soma a subestimar
+    assert isinstance(call("quote_shipping", cep="79002-000", order_total=600).result, Ok)

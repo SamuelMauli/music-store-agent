@@ -10,7 +10,7 @@ from emporio.agent.tools.base import Tool, ToolContext
 from emporio.agent.tools.formatting import brl, day
 from emporio.agent.tools.results import Ambiguous, NotFound, Ok, PolicyBlocked, ToolResult
 from emporio.domain.calendar import DEFAULT_CALENDAR, HolidayCalendar
-from emporio.domain.cep import format_cep, normalize_cep, region_of_uf, uf_of_cep
+from emporio.domain.cep import CEP_PATTERN, format_cep, normalize_cep, region_of_uf
 from emporio.domain.errors import InvalidValueError
 from emporio.domain.value_objects import Money
 from emporio.policies.shipping import FREE_SHIPPING_ABOVE, METRO_FLAT_FEE, needs_special_freight
@@ -42,7 +42,7 @@ class QuoteShippingInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     cep: str = Field(
-        pattern=r"^\d{5}-?\d{3}$", description="CEP de destino com 8 dígitos, ex.: 79002-000."
+        pattern=CEP_PATTERN.pattern, description="CEP de destino com 8 dígitos, ex.: 79002-000."
     )
     weight_kg: Decimal | None = Field(
         default=None,
@@ -118,10 +118,11 @@ class QuoteShipping(Tool[QuoteShippingInput, QuoteView]):
 
     def run(self, args: QuoteShippingInput, ctx: ToolContext) -> ToolResult[QuoteView]:
         """Valida o CEP, resolve UF e cota pela regra do manual ou pela tabela de estimativas."""
-        try:
-            cep = normalize_cep(args.cep)
-        except InvalidValueError as exc:
-            return Ambiguous(str(exc))
+        cep = normalize_cep(args.cep)  # o formato já foi validado pelo schema
+        missing = self._missing_products(args)
+        if missing:
+            ids = ", ".join(str(i) for i in missing)
+            return NotFound(f"Produto(s) não encontrado(s) no catálogo: {ids}. Confira os IDs.")
         total, large = self._basket(args)
         try:
             quote = quote_shipping(
@@ -134,7 +135,6 @@ class QuoteShipping(Tool[QuoteShippingInput, QuoteView]):
         except InvalidValueError:
             return Ambiguous(WEIGHT_QUESTION)
         sources = ("§5.1" if isinstance(quote, MetroQuote) else "§5.2",)
-        uf = uf_of_cep(cep) or ""
         match quote:
             case UnknownCep():
                 return NotFound("CEP fora das faixas dos Correios. Peça para conferir o CEP.")
@@ -145,10 +145,16 @@ class QuoteShipping(Tool[QuoteShippingInput, QuoteView]):
                     "5.2",
                 )
             case MetroQuote():
-                return Ok(self._metro_view(quote, cep, uf), sources=sources)
+                return Ok(self._metro_view(quote, cep), sources=sources)
             case OutsideQuote():
                 return Ok(self._outside_view(quote, cep, args.weight_kg, large), sources=sources)
         raise AssertionError("ShippingQuote inexaustivo")  # pragma: no cover
+
+    def _missing_products(self, args: QuoteShippingInput) -> list[int]:
+        """IDs informados que não existem: somar só os achados subestimaria o total."""
+        if args.order_total is not None or not args.product_ids:
+            return []
+        return [pid for pid in args.product_ids if self._products.get(pid) is None]
 
     def _basket(self, args: QuoteShippingInput) -> tuple[Money | None, bool]:
         if args.order_total is not None:
@@ -160,10 +166,10 @@ class QuoteShipping(Tool[QuoteShippingInput, QuoteView]):
         return total, any(needs_special_freight(e.product.name) for e in entries)
 
     @staticmethod
-    def _metro_view(quote: MetroQuote, cep: str, uf: str) -> QuoteView:
+    def _metro_view(quote: MetroQuote, cep: str) -> QuoteView:
         return QuoteView(
             cep=format_cep(cep),
-            uf=uf,
+            uf=quote.uf,
             region="metropolitana",
             estimate=False,  # regra oficial do manual, não estimativa
             fee=None if quote.fee is None else "grátis" if quote.free else brl(quote.fee),
