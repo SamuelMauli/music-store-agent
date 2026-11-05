@@ -128,6 +128,23 @@ def eval_turns(directory: Path = EVALS_DIR) -> set[str]:
     return keys
 
 
+def must_answer_turns(directory: Path = EVALS_DIR) -> list[str]:
+    """Turnos dos evals ponta a ponta que o agente tem de RESPONDER (a guarda não pode barrar).
+
+    Todos os de ``golden.yaml`` (inclusive ``fake: false``) e os adversariais que esperam
+    resposta (``must_mention`` ou ``tool_calls``), como a tag ``<system>`` falsa seguida de
+    pergunta legítima: o contrato ali é ignorar a tag e responder o preço real.
+    """
+    turns: list[str] = []
+    for suite in ("golden", "adversarial"):
+        cases = yaml.safe_load((directory / f"{suite}.yaml").read_text(encoding="utf-8")) or []
+        for case in cases:
+            expect = case.get("expect") or {}
+            if suite == "golden" or expect.get("must_mention") or expect.get("tool_calls"):
+                turns.extend(case.get("turns", []))
+    return turns
+
+
 def deduplicate(
     examples: Iterable[GuardExample], exclude: set[str]
 ) -> tuple[list[GuardExample], BuildStats]:

@@ -67,7 +67,7 @@ def encode(examples: list[ds.GuardExample], embedder: Embedder) -> Encoded:
     rows: list[list[int]] = []
     for ex in examples:
         clean = guard_input.normalize(ex.text)
-        variants = [clean, *guard_input.deobfuscated_variants(clean)]
+        variants = [clean, *guard_input.classifier_variants(clean)]
         rows.append(list(range(len(texts), len(texts) + len(variants))))
         texts.extend(variants)
     return Encoded(examples, embedder.embed(texts), rows)
@@ -147,11 +147,13 @@ def _recall_by_category(
 
 
 def choose_threshold(
-    examples: Sequence[ds.GuardExample], scores: Sequence[float]
+    examples: Sequence[ds.GuardExample], scores: Sequence[float], floor: float = 0.0
 ) -> tuple[float, dict[str, Any]]:
-    """Maior recall com FPR dentro dos tetos; empate fica com o limiar mais alto.
+    """Maior recall com FPR nos tetos e limiar acima de ``floor``; empate fica com o mais alto.
 
-    Sem limiar que respeite os tetos, fica o de menor FPR nos clientes da loja (e avisa).
+    ``floor`` é o maior score do modelo nos turnos de eval que precisam de resposta: um limiar
+    igual ou abaixo dele bloquearia um cliente do contrato. Sem limiar que respeite tudo, fica
+    o de menor FPR nos clientes da loja (e avisa).
     """
     best: tuple[float, float, float] | None = None  # (recall, limiar, fpr loja)
     fallback = (2.0, 0.0)  # (fpr loja, -limiar); 2.0 perde para qualquer FPR real
@@ -159,6 +161,8 @@ def choose_threshold(
         pred = [s >= t for s in scores]
         m = confusion(examples, pred)
         fallback = min(fallback, (m["fpr_store_customers"], -t))
+        if t <= floor:
+            continue
         if m["fpr_store_customers"] <= MAX_FPR_STORE and m["fpr_hard_negatives"] <= MAX_FPR_HARD:
             cand = (m["recall"], t, m["fpr_store_customers"])
             if best is None or cand[:2] >= best[:2]:
@@ -166,7 +170,8 @@ def choose_threshold(
     if best is not None:
         rule = (
             f"maior recall OOF com FPR <= {MAX_FPR_STORE:.0%} (clientes da loja) e "
-            f"<= {MAX_FPR_HARD:.0%} (negativos difíceis); empate fica com o limiar mais alto"
+            f"<= {MAX_FPR_HARD:.0%} (negativos difíceis), limiar acima do maior score dos "
+            "turnos de eval que exigem resposta; empate fica com o limiar mais alto"
         )
         threshold = best[1]
     else:
@@ -176,12 +181,23 @@ def choose_threshold(
     return threshold, {"rule": rule, "meets_ceilings": best is not None, "oof_at_threshold": oof}
 
 
-def select_model(enc: Encoded, embedding_model: str) -> tuple[LogisticModel, dict[str, Any]]:
-    """Escolhe ``l2`` e limiar por validação cruzada; ajusta no train inteiro."""
+def select_model(
+    enc: Encoded, embedding_model: str, must_answer: Encoded | None = None
+) -> tuple[LogisticModel, dict[str, Any]]:
+    """Escolhe ``l2`` e limiar por validação cruzada; ajusta no train inteiro.
+
+    ``must_answer`` (turnos de eval que exigem resposta) não treina nem entra nas métricas:
+    só impõe o piso do limiar, medido com o modelo ajustado no train inteiro daquele ``l2``.
+    """
     trials: list[dict[str, Any]] = []
     for l2 in L2_GRID:
-        threshold, info = choose_threshold(enc.examples, oof_scores(enc, l2))
-        trials.append({"l2": l2, "threshold": threshold, **info})
+        floor = 0.0
+        if must_answer is not None and must_answer.examples:
+            weights, bias = fit_logistic(enc.base, enc.labels(), l2=l2)
+            full = LogisticModel(weights, bias, 0.5, "")
+            floor = max(max_scores(must_answer, full))
+        threshold, info = choose_threshold(enc.examples, oof_scores(enc, l2), floor)
+        trials.append({"l2": l2, "threshold": threshold, "eval_turns_max_score": floor, **info})
 
     def key(trial: dict[str, Any]) -> tuple[bool, float, float]:
         # quem cumpre os tetos de FPR vence; entre eles, maior recall OOF, depois menor FPR
@@ -254,6 +270,7 @@ def run(
     sources: Callable[
         [], tuple[list[ds.GuardExample], list[ds.GuardExample], ds.BuildStats]
     ] = ds.build,
+    must_answer: Callable[[], list[str]] = ds.must_answer_turns,
 ) -> dict[str, Any]:
     """Pipeline completo; devolve as métricas gravadas."""
     train, test, stats = sources()
@@ -262,7 +279,8 @@ def run(
     ds.write_jsonl(test_path, test)
 
     train_enc, test_enc = encode(train, embedder), encode(test, embedder)
-    model, selection = select_model(train_enc, embedding_model)
+    gate = [ds.GuardExample(t, 0, "eval_turn", "", "eval", "") for t in must_answer()]
+    model, selection = select_model(train_enc, embedding_model, encode(gate, embedder))
     model_path.write_text(json.dumps(model.to_dict(), indent=1) + "\n", encoding="utf-8")
     model = LogisticModel.load(model_path)  # avalia exatamente o que foi gravado (arredondado)
 
