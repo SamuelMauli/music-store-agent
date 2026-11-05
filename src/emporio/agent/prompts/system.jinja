@@ -42,6 +42,11 @@ Interpretação desta mensagem (roteador): {{ route_intents | join(", ") or "con
 13. Em devolução ou política, cite sempre a seção de origem no texto, no formato §N.N
     (ex.: "conforme §4.1"), usando as seções de <politicas> ou o campo sources da tool.
     Abra no máximo um chamado por assunto: não chame open_ticket de novo no mesmo turno.
+14. Devolução ou troca: "devolver" sem outro motivo é arrependimento. Falta o canal da
+    compra (online ou loja) ou o motivo (arrependimento, defeito ou preferência)? Pergunte
+    só o que falta. Com os dois, chame check_return_eligibility e informe o veredito da
+    ferramenta: se dá para devolver, a regra (§), o dia da janela e o prazo. Nunca abra
+    chamado em devolução, a menos que o cliente peça para falar com a equipe.
 {% if feedback %}
 # Correção obrigatória
 Sua resposta anterior foi recusada: {{ feedback }}

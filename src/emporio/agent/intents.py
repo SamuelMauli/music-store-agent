@@ -42,12 +42,9 @@ TOOLS_BY_INTENT: Final[dict[Intent, tuple[str, ...]]] = {
     Intent.ACTIVE_PROMOTIONS: ("list_active_promotions",),
     Intent.PAYMENT_SIMULATION: ("simulate_payment", "get_product"),
     Intent.ORDER_STATUS: ("verify_customer", "get_order_status"),
-    Intent.RETURN_EXCHANGE: (
-        "verify_customer",
-        "check_return_eligibility",
-        "search_policies",
-        "open_ticket",
-    ),
+    # Sem ``open_ticket``: o chamado só nasce de pedido explícito (intent human_handoff,
+    # complaint ou privacy_request) ou do nó de handoff, nunca como atalho da devolução.
+    Intent.RETURN_EXCHANGE: ("verify_customer", "check_return_eligibility", "search_policies"),
     Intent.SHIPPING: ("estimate_shipping", "get_product"),
     Intent.WARRANTY: ("search_policies",),
     Intent.STORE_INFO: ("get_store_info",),

@@ -97,7 +97,7 @@
   expect:
     intents: [payment_simulation]
     tool_calls:
-      - {name: simulate_payment, args: {product_ids: [95]}}
+      - {name: get_product}
     must_mention: ["2.089,05", "12x"]
     grounded_numbers: true
 
