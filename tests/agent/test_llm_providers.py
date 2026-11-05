@@ -199,6 +199,8 @@ def test_anthropic_builds_chat_anthropic(monkeypatch: pytest.MonkeyPatch) -> Non
     # sonnet-5-5 recusa temperatura fora do padrão: o adaptador manda a padrão
     assert chat.temperature is None
     assert _build("anthropic:claude-haiku-4-5").temperature == 0.1
+    # haiku-5-5 recusa qualquer temperature (HTTP 400 medido ao vivo): não é enviada
+    assert _build("anthropic:claude-haiku-5-5").temperature is None
 
 
 def test_anthropic_as_default_provider_honours_base_url_and_key() -> None:

@@ -25,6 +25,7 @@ StructuredMethod = Literal["function_calling", "json_schema", "json_mode"]
 
 _LOCAL_PREFIXES = ("http://localhost", "http://127.0.0.1", "http://0.0.0.0", "http://[::1]")
 _DEFAULT_AZURE_API_VERSION = "2024-10-21"
+_NO_TEMPERATURE_PREFIXES = ("claude-haiku-5",)
 
 
 class LLMConfigError(ValueError):
@@ -77,6 +78,9 @@ REGISTRY: dict[str, ProviderInfo] = {
             module="langchain_anthropic",
             extra="anthropic",
             key_envs=("ANTHROPIC_API_KEY",),
+            # Claude 5.x recusa tool forçada para saída estruturada (HTTP 400): usa o
+            # structured output nativo da API.
+            structured_method="json_schema",
             hoist_system=True,
         ),
         ProviderInfo(
@@ -284,6 +288,10 @@ def _anthropic(info: ProviderInfo, spec: ModelSpec, settings: Settings, p: ChatP
             **extra,
         )
 
+    # Claude Haiku 5.x recusa qualquer ``temperature`` (HTTP 400 "Extra inputs are not
+    # permitted", medido ao vivo) e o adaptador ainda não sabe disso.
+    if spec.model.startswith(_NO_TEMPERATURE_PREFIXES):
+        return make(None)
     chat = make(p.temperature)
     # Modelos recentes (ex.: claude-sonnet-5-5) recusam temperatura fora do padrão; o
     # próprio adaptador sabe quais: se a checagem dele reprovar, usa a temperatura padrão.

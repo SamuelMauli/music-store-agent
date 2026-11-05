@@ -177,7 +177,7 @@ def _spy_factory(chat: SpyChat) -> Any:
     ("provider", "method"),
     [
         ("google", "json_schema"),
-        ("anthropic", "function_calling"),
+        ("anthropic", "json_schema"),
         ("openai", "function_calling"),
         ("bedrock", "function_calling"),
         ("groq", "function_calling"),
