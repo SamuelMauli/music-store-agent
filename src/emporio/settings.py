@@ -106,6 +106,19 @@ class Settings(BaseSettings):
         metrics_enabled: Expõe ``GET /metrics`` no formato Prometheus.
         cors_origins: Origens liberadas para CORS (vazio = CORS desligado).
         max_message_chars: Tamanho máximo de uma mensagem do cliente.
+        whatsapp_verify_token: Token que a Meta devolve no ``GET`` de verificação do webhook.
+        whatsapp_app_secret: App secret; assina (HMAC-SHA256) o corpo de cada ``POST``.
+        whatsapp_access_token: Token da Graph API para enviar mensagens.
+        whatsapp_phone_number_id: Id do número do WhatsApp Business na Meta.
+        whatsapp_hash_pepper: Pepper do hash do telefone (id de conversa, sessão e logs).
+            Estável: trocá-lo desliga a memória e os handoffs em curso.
+        operator_api_keys: Chaves dos endpoints de operador (distintas de ``api_keys``).
+        whatsapp_api_version: Versão da Graph API (premissa configurável).
+        whatsapp_rate_limit_per_minute: Mensagens por número por minuto.
+        whatsapp_handoff_ttl_seconds: Sem ação do operador por este tempo, a conversa volta
+            ao bot. Premissa de produto (4h), sem fonte externa: ajuste ao SLA da loja.
+        handoff_path: SQLite do handoff (usado sem ``redis_url``).
+    O canal fica ligado só com as seis variáveis acima preenchidas.
     """
 
     model_config = SettingsConfigDict(env_prefix="EMPORIO_", env_file=".env", extra="ignore")
@@ -163,6 +176,16 @@ class Settings(BaseSettings):
     metrics_enabled: bool = True
     cors_origins: list[str] = []
     max_message_chars: int = 2000
+    whatsapp_verify_token: SecretStr | None = None
+    whatsapp_app_secret: SecretStr | None = None
+    whatsapp_access_token: SecretStr | None = None
+    whatsapp_phone_number_id: str | None = None
+    whatsapp_hash_pepper: SecretStr | None = None
+    operator_api_keys: list[SecretStr] = []
+    whatsapp_api_version: str = "v21.0"
+    whatsapp_rate_limit_per_minute: int = 10
+    whatsapp_handoff_ttl_seconds: int = 14_400
+    handoff_path: Path = Path("data/handoff.sqlite")
 
     def price_for(self, model: str, tier: Literal["small", "medium"]) -> tuple[float, float]:
         """Preço (entrada, saída) por milhão de tokens: tabela por modelo, senão o do tier."""
@@ -171,6 +194,30 @@ class Settings(BaseSettings):
         if tier == "small":
             return self.llm_price_small_input, self.llm_price_small_output
         return self.llm_price_medium_input, self.llm_price_medium_output
+
+    def whatsapp_missing(self) -> list[str]:
+        """Variáveis do canal WhatsApp que faltam (todas faltando = canal desligado)."""
+
+        def filled(value: SecretStr | str | None) -> bool:
+            raw = value.get_secret_value() if isinstance(value, SecretStr) else value
+            return bool(raw and raw.strip())
+
+        required = {
+            "EMPORIO_WHATSAPP_VERIFY_TOKEN": self.whatsapp_verify_token,
+            "EMPORIO_WHATSAPP_APP_SECRET": self.whatsapp_app_secret,
+            "EMPORIO_WHATSAPP_ACCESS_TOKEN": self.whatsapp_access_token,
+            "EMPORIO_WHATSAPP_PHONE_NUMBER_ID": self.whatsapp_phone_number_id,
+            "EMPORIO_WHATSAPP_HASH_PEPPER": self.whatsapp_hash_pepper,
+        }
+        missing = [name for name, value in required.items() if not filled(value)]
+        if not any(filled(k) for k in self.operator_api_keys):
+            missing.append("EMPORIO_OPERATOR_API_KEYS")
+        return missing
+
+    @property
+    def whatsapp_enabled(self) -> bool:
+        """Canal ligado: as seis variáveis presentes."""
+        return not self.whatsapp_missing()
 
     @property
     def policy_pdf(self) -> Path:
@@ -184,6 +231,11 @@ class Settings(BaseSettings):
                 tzinfo=ZoneInfo(self.timezone)
             )
         return self
+
+
+def secret_value(secret: SecretStr | None) -> str:
+    """Conteúdo do segredo, ou vazio se ausente."""
+    return secret.get_secret_value() if secret else ""
 
 
 def load_settings(env_file: str | Path = ".env") -> Settings:

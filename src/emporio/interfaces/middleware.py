@@ -24,6 +24,8 @@ from emporio.observability.metrics import Metrics
 REQUEST_ID = "X-Request-ID"
 PUBLIC_PATHS = frozenset({"/healthz", "/readyz"})
 _API_PREFIX = "/v1/"
+WEBHOOK_PATH = "/webhooks/whatsapp"  # sem chave de API: a Meta autentica por assinatura HMAC
+OPERATOR_PREFIX = "/v1/operator/"  # só aceita as chaves de operador, nunca as do chat
 _SAFE_ID_CHARS = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.-")
 log = logging.getLogger("emporio.access")
 
@@ -58,6 +60,8 @@ class ApiGuard:
         api_keys: Sequence[str] = (),
         max_body_bytes: int,
         metrics: Metrics | None = None,
+        operator_keys: Sequence[str] = (),
+        body_limits: dict[str, int] | None = None,
     ) -> None:
         """Cria o middleware.
 
@@ -66,14 +70,26 @@ class ApiGuard:
             api_keys: Chaves aceitas; vazio deixa a API aberta (só permitido em dev).
             max_body_bytes: Maior corpo aceito (``413`` acima disso).
             metrics: Métricas HTTP; ``None`` desliga.
+            operator_keys: Chaves dos endpoints ``/v1/operator/``; vazio nega tudo ali
+                (diferente de ``api_keys``, nunca fica aberto).
+            body_limits: Limite de corpo por prefixo de caminho (vence ``max_body_bytes``).
         """
         self._app = app
         self._digests = [_digest(k) for k in api_keys if k]
+        self._operator_digests = [_digest(k) for k in operator_keys if k]
+        self._body_limits = body_limits or {}
         self._max_body = max_body_bytes
         self._metrics = metrics
 
-    def _authorized(self, headers: Headers) -> bool:
-        if not self._digests:
+    def _authorized(self, headers: Headers, path: str) -> bool:
+        if path == WEBHOOK_PATH:
+            return True
+        digests = self._digests
+        if path.startswith(OPERATOR_PREFIX):
+            if not self._operator_digests:
+                return False
+            digests = self._operator_digests
+        elif not digests:
             return True
         supplied = headers.get("x-api-key", "")
         auth = headers.get("authorization", "")
@@ -81,7 +97,7 @@ class ApiGuard:
             supplied = auth[7:].strip()
         candidate = _digest(supplied)
         # Percorre todas as chaves, sem curto-circuito: tempo independe de qual casou.
-        matches = [hmac.compare_digest(candidate, known) for known in self._digests]
+        matches = [hmac.compare_digest(candidate, known) for known in digests]
         return any(matches) and bool(supplied)
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
@@ -120,7 +136,8 @@ class ApiGuard:
     async def _handle(
         self, scope: Scope, receive: Receive, send: Send, headers: Headers, rid: str
     ) -> None:
-        if scope["path"] not in PUBLIC_PATHS and not self._authorized(headers):
+        path = scope["path"]
+        if path not in PUBLIC_PATHS and not self._authorized(headers, path):
             denied = error_response(
                 401,
                 "unauthorized",
@@ -130,8 +147,11 @@ class ApiGuard:
             )
             await denied(scope, receive, send)
             return
+        limit = next(
+            (v for p, v in self._body_limits.items() if path.startswith(p)), self._max_body
+        )
         declared = headers.get("content-length", "")
-        if declared.isdigit() and int(declared) > self._max_body:
+        if declared.isdigit() and int(declared) > limit:
             await self._too_large(scope, receive, send, rid)
             return
 
@@ -143,7 +163,7 @@ class ApiGuard:
             message = await receive()
             if message["type"] == "http.request":
                 seen += len(message.get("body", b""))
-                if seen > self._max_body:
+                if seen > limit:
                     exceeded = True
                     raise _BodyTooLargeError
             return message
