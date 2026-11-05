@@ -1,9 +1,11 @@
 """CEP brasileiro: validação de formato e resolução de UF e região pelas faixas dos Correios.
 
 Fonte das faixas: tabela pública "Faixas de CEP por UF" dos Correios (Guia Postal / e-DNE),
-transcrita à mão aqui. A tabela cobre todo o espaço 01000-000 a 99999-999 sem sobreposição;
-``tests/unit/test_cep.py`` verifica essa continuidade, mas não substitui conferir contra a
-base oficial (DNE) antes de uso em produção. A UF vem só da faixa: o CEP não diz o município.
+transcrita à mão aqui, sem sobreposição. Lacuna documentada: 78900-000 a 78999-999 (bloco
+antigo de RO, hoje fora da faixa vigente 76800-000 a 76999-999) resolve para ``None``.
+``tests/unit/test_cep.py`` verifica a continuidade das demais faixas, mas isso não substitui
+conferir contra a base oficial (DNE) antes de uso em produção. A UF vem só da faixa: o CEP
+não diz o município.
 """
 
 from __future__ import annotations
@@ -43,7 +45,6 @@ UF_RANGES: Final[tuple[tuple[str, int, int], ...]] = (
     ("RO", 76800000, 76999999),
     ("TO", 77000000, 77999999),
     ("MT", 78000000, 78899999),
-    ("RO", 78900000, 78999999),
     ("MS", 79000000, 79999999),
     ("PR", 80000000, 87999999),
     ("SC", 88000000, 89999999),

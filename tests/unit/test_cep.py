@@ -14,14 +14,28 @@ from emporio.domain.cep import (
 )
 from emporio.domain.errors import InvalidValueError
 
+# Única lacuna aceita: bloco 789xx, antigo de RO, que hoje não pertence a nenhuma UF.
+KNOWN_GAP = (78900000, 78999999)
 
-def test_ranges_cover_the_whole_cep_space_without_gaps_or_overlap() -> None:
+
+def test_ranges_cover_the_cep_space_without_overlap_except_the_known_gap() -> None:
     ordered = sorted(UF_RANGES, key=lambda r: r[1])
     assert ordered[0][1] == 1000000
     assert ordered[-1][2] == 99999999
+    gaps = []
     for (_, _, prev_high), (_, low, high) in pairwise(ordered):
-        assert low == prev_high + 1
         assert low <= high
+        assert low > prev_high  # sem sobreposição
+        if low != prev_high + 1:
+            gaps.append((prev_high + 1, low - 1))
+    assert gaps == [KNOWN_GAP]
+
+
+def test_known_gap_is_unknown() -> None:
+    assert uf_of_cep("78900-000") is None
+    assert uf_of_cep("78999-999") is None
+    assert uf_of_cep("78899-999") == "MT"
+    assert uf_of_cep("79000-000") == "MS"
 
 
 def test_every_uf_range_has_a_region() -> None:
@@ -40,7 +54,7 @@ def test_every_uf_range_has_a_region() -> None:
         ("73000-000", "DF"),
         ("69301-000", "RR"),
         ("69400-000", "AM"),
-        ("78900-000", "RO"),
+        ("76800-000", "RO"),
         ("90010-000", "RS"),
         ("99999-999", "RS"),
     ],
