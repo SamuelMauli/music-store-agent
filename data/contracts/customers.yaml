@@ -1,0 +1,21 @@
+apiVersion: v3.0.0
+kind: DataContract
+id: emporio.support.customers
+version: 1.0.0
+status: active
+domain: suporte
+dataProduct: relacionamento-com-clientes
+owner: atendimento@emporiodamusica.com.br
+description: "Clientes da loja. Dados pessoais (LGPD): nunca expostos sem verificação de identidade."
+schema:
+  - name: customers
+    properties:
+      - {name: customer_id, logicalType: integer, required: true, unique: true}
+      - {name: name, logicalType: string, required: true}
+      - {name: phone, logicalType: string, required: true, classification: pii}
+      - {name: email, logicalType: string, required: true, classification: pii}
+      - {name: city, logicalType: string, required: false}
+sla:
+  freshness: 1d
+  availability: 99.5%
+consumers: [agente-atendimento]

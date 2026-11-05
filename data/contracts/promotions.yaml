@@ -1,0 +1,23 @@
+apiVersion: v3.0.0
+kind: DataContract
+id: emporio.catalog.promotions
+version: 1.0.0
+status: active
+domain: catalogo
+dataProduct: catalogo-de-instrumentos
+owner: gerencia-comercial@emporiodamusica.com.br
+description: Promoções por produto; sem datas de vigência, vale a flag is_active.
+schema:
+  - name: promotions
+    properties:
+      - {name: promotion_id, logicalType: integer, required: true, unique: true}
+      - {name: product_id, logicalType: integer, required: true,
+         references: products.product_id}
+      - {name: discount_percent, logicalType: number, required: true, minimum: 0.01,
+         maximum: 100}
+      - {name: description, logicalType: string, required: false}
+      - {name: is_active, logicalType: boolean, required: true}
+sla:
+  freshness: 15m
+  availability: 99.5%
+consumers: [agente-atendimento, site]

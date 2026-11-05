@@ -1,0 +1,20 @@
+apiVersion: v3.0.0
+kind: DataContract
+id: emporio.orders.order_items
+version: 1.0.0
+status: active
+domain: pedidos
+dataProduct: pedidos-e-entregas
+owner: operacoes@emporiodamusica.com.br
+description: Itens dos pedidos; o arquivo de origem não traz preço unitário.
+schema:
+  - name: order_items
+    properties:
+      - {name: order_id, logicalType: integer, required: true, references: orders.order_id}
+      - {name: product_id, logicalType: integer, required: true,
+         references: products.product_id}
+      - {name: quantity, logicalType: integer, required: true, minimum: 1}
+sla:
+  freshness: 15m
+  availability: 99.5%
+consumers: [agente-atendimento, bi-comercial]

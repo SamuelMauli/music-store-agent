@@ -1,0 +1,27 @@
+apiVersion: v3.0.0
+kind: DataContract
+id: emporio.catalog.products
+version: 1.0.0
+status: active
+domain: catalogo
+dataProduct: catalogo-de-instrumentos
+owner: gerencia-comercial@emporiodamusica.com.br
+description: Catálogo de instrumentos vendáveis, fonte de preço e estoque.
+schema:
+  - name: products
+    properties:
+      - {name: product_id, logicalType: integer, required: true, unique: true}
+      - {name: name, logicalType: string, required: true}
+      - {name: price_brl, logicalType: number, required: true, minimum: 0.01}
+      - {name: stock_quantity, logicalType: integer, required: true, minimum: 0}
+      - {name: status, logicalType: string, required: true,
+         enum: [active, discontinued, coming_soon]}
+      - {name: category_id, logicalType: integer, required: true,
+         references: categories.category_id}
+      - {name: description, logicalType: string, required: false}
+      - {name: specs, logicalType: string, required: true}
+      - {name: created_at, logicalType: date, required: false}
+sla:
+  freshness: 15m        # meta de produção; no protótipo, por ingestão
+  availability: 99.5%
+consumers: [agente-atendimento, site, bi-comercial]

@@ -1,0 +1,28 @@
+apiVersion: v3.0.0
+kind: DataContract
+id: emporio.orders.orders
+version: 1.0.0
+status: active
+domain: pedidos
+dataProduct: pedidos-e-entregas
+owner: operacoes@emporiodamusica.com.br
+description: Pedidos; total_brl é a fonte oficial do faturamento e não é recalculado.
+schema:
+  - name: orders
+    properties:
+      - {name: order_id, logicalType: integer, required: true, unique: true}
+      - {name: customer_id, logicalType: integer, required: true,
+         references: customers.customer_id}
+      - {name: order_date, logicalType: date, required: true}
+      - {name: status, logicalType: string, required: true,
+         enum: [pending, confirmed, shipped, delivered, cancelled]}
+      - {name: total_brl, logicalType: number, required: true, minimum: 0.01}
+      - {name: payment_method, logicalType: string, required: true,
+         enum: [pix, boleto, debit, credit_3x, credit_6x, credit_12x]}
+      - {name: tracking_code, logicalType: string, required: false}
+      - {name: estimated_delivery, logicalType: date, required: false}
+      - {name: notes, logicalType: string, required: false}
+sla:
+  freshness: 15m
+  availability: 99.5%
+consumers: [agente-atendimento, bi-comercial]

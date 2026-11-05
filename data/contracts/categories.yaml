@@ -1,0 +1,19 @@
+apiVersion: v3.0.0
+kind: DataContract
+id: emporio.catalog.categories
+version: 1.0.0
+status: active
+domain: catalogo
+dataProduct: catalogo-de-instrumentos
+owner: gerencia-comercial@emporiodamusica.com.br
+description: Categorias de instrumentos; algumas existem sem produtos cadastrados.
+schema:
+  - name: categories
+    properties:
+      - {name: category_id, logicalType: integer, required: true, unique: true}
+      - {name: name, logicalType: string, required: true}
+      - {name: description, logicalType: string, required: false}
+sla:
+  freshness: 1d
+  availability: 99.5%
+consumers: [agente-atendimento, site]
