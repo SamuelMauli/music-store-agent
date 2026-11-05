@@ -197,7 +197,11 @@ class CheckReturnInput(BaseModel):
 
     order_id: PositiveInt
     reason: Literal["regret", "defect", "preference"] = Field(
-        description="regret = arrependimento; defect = defeito; preference = trocar por outro."
+        default="regret",
+        description=(
+            "regret = arrependimento (padrão para 'devolver'); defect = defeito; "
+            "preference = trocar por outro. Não pergunte o motivo: deduza da frase."
+        ),
     )
     channel: Literal["online", "store"] | None = Field(
         default=None, description="Onde comprou. Se o cliente não disse, deixe vazio e pergunte."

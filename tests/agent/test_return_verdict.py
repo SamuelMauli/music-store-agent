@@ -15,6 +15,8 @@ from emporio.agent.intents import Intent, tools_for
 from emporio.agent.llm.fake import FakeLLM
 from emporio.agent.llm.types import LLMResponse, Message, ToolCall, Usage
 from emporio.agent.nodes.facts import with_return_verdict
+from emporio.agent.prompts import render
+from emporio.agent.tools.orders import CheckReturnInput
 from emporio.bootstrap import Container, build_container
 from emporio.settings import Settings
 from tests.agent.conftest import fake_settings
@@ -112,3 +114,23 @@ def test_return_flow_states_verdict_from_tool_and_opens_no_ticket(container: Con
         assert "open_ticket" not in result.tools
         assert "EMP-" not in result.answer
         assert not result.handoff
+
+
+def test_reason_defaults_to_regret_and_prompt_never_asks_for_it() -> None:
+    assert CheckReturnInput(order_id=7).reason == "regret"
+    text = render(
+        "system",
+        now_text="x",
+        store_open=True,
+        next_opening="x",
+        customer_first_name="",
+        order_id=None,
+        summary="",
+        focus_products=[],
+        route_intents=[],
+        route_entities="",
+        scope_notes=[],
+        feedback="",
+        policy_context=[],
+    )
+    assert "nunca pergunte o motivo" in text.lower()
