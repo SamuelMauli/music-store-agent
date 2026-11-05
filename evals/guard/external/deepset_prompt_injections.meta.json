@@ -1,0 +1,14 @@
+{
+  "dataset": "deepset/prompt-injections",
+  "url": "https://huggingface.co/datasets/deepset/prompt-injections",
+  "license": "apache-2.0",
+  "revision": "4f61ecb038e9c3fb77e21034b22511b523772cdd",
+  "last_modified_upstream": "2024-07-30T16:12:57Z",
+  "retrieved": "2026-11-05",
+  "retrieved_via": "https://datasets-server.huggingface.co/rows (config=default, splits train+test)",
+  "rows": 662,
+  "injections": 263,
+  "languages": ["en", "de"],
+  "fields": {"text": "texto original", "label": "1 = injeção, 0 = benigno", "upstream_split": "split original", "row_idx": "índice da linha no split original"},
+  "note": "Conteúdo inalterado; o split upstream é ignorado e o set inteiro passa pela mesma deduplicação e divisão do conjunto curado."
+}
