@@ -1,28 +1,27 @@
 Catálogo: violões por faixa de preço e preço no PIX
 Data de referência: 25/03/2026 10:00 (America/Campo_Grande)
-Modelo: openai/gpt-oss-20b (resposta), openai/gpt-oss-20b (roteador)
-Provider: api.groq.com
+Modelo: google:gemini-3.5-flash-lite (resposta), google:gemini-3.1-flash-lite (roteador)
+Provider: google
 Nota: e-mails/telefones do cliente aparecem mascarados na transcrição; o agente recebeu o valor real.
 ------------------------------------------------------------------------
 Cliente: Quais violões vocês têm até R$ 1.000?
-Tom: Oi! Eu sou o Tom, assistente virtual da Empório da Música, e você pode pedir um atendente humano quando quiser.
-- Tagima Memphis AC‑39 Nylon Natural – R$ 429,90 
-- Rozini RC‑104 Nylon Estudante – R$ 459,90 
-- Shelby SN‑100 Folk Aço Preto – R$ 549,00 
-- Giannini GF‑1R Aço Folk Sunburst – R$ 579,90 
-- Yamaha C40 Nylon Natural – R$ 599,90 
+Tom: Oi! Eu sou o Tom, assistente virtual da Empório da Música, e você pode pedir um atendente humano quando quiser. Encontrei 12 violões no total e estou mostrando alguns para você:
 
-Total encontrados: 12. Mostrando apenas os 5 mais baratos. 
+- Tagima Memphis AC-39 Nylon Natural: R$ 429,90
+- Rozini RC-104 Nylon Estudante: R$ 459,90
+- Shelby SN-100 Folk Aço Preto: R$ 549,00
+- Giannini GF-1R Aço Folk Sunburst: R$ 579,90
+- Yamaha C40 Nylon Natural: R$ 599,90
 
-Posso ajudar em mais alguma coisa?
+Posso te ajudar com mais alguma informação sobre esses modelos?
 
 Cliente: E quanto fica o Yamaha C40 no PIX?
-Tom: O Yamaha C40 custa R$ 569,91 no PIX. 
+Tom: O Yamaha C40 Nylon Natural sai por R$ 569,91 no PIX.
 
-Posso ajudar em mais alguma coisa?
+Posso te ajudar com mais alguma coisa?
 
 ------------------------------------------------------------------------
-Tools chamadas por turno: search_products | get_product
-Latência por turno: 2974 ms | 4595 ms
-Tokens: 8399 entrada, 750 saída
-Custo estimado: US$ 0.001469
+Tools chamadas por turno: search_products | get_product, simulate_payment
+Latência por turno: 18105 ms | 7301 ms
+Tokens: 20911 entrada, 558 saída
+Custo estimado: US$ 0.003299

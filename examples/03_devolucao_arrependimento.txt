@@ -1,30 +1,24 @@
 Devolução por arrependimento, com verificação de e-mail
 Data de referência: 21/02/2026 10:00 (America/Campo_Grande)
-Modelo: openai/gpt-oss-20b (resposta), openai/gpt-oss-20b (roteador)
-Provider: api.groq.com
+Modelo: google:gemini-3.5-flash-lite (resposta), google:gemini-3.1-flash-lite (roteador)
+Provider: google
 Nota: e-mails/telefones do cliente aparecem mascarados na transcrição; o agente recebeu o valor real.
 ------------------------------------------------------------------------
 Cliente: Quero devolver o pedido 7
 Tom: Oi! Eu sou o Tom, assistente virtual da Empório da Música, e você pode pedir um atendente humano quando quiser. Obrigado! Agora preciso do e-mail ou do telefone cadastrado na compra, para confirmar que o pedido é seu.
 
 Cliente: l***@jmail.com
-Tom: Para começar, você comprou online ou na loja física?
+Tom: A compra foi feita online ou na loja?
 
 Cliente: comprei online
-Tom: Pela regra §4.1, dá para devolver. Você está no dia 4 de 7 dias corridos. Prazo até 24/02/2026. Oi, Letícia! 
-Seu pedido 7 pode ser devolvido. 
-Conforme §4.1, você tem até 7 dias corridos após receber o produto. 
-Hoje restam 3 dias (até 24/02/2026). 
+Tom: Sua devolução por arrependimento é elegível, conforme §4.1. Estamos no dia 4 de 7 dias corridos, restando 3 dias. O prazo vai até 24/02/2026 e é contado da entrega estimada, pois o pedido não registra a data de recebimento.
 
-Para devolver:
-- Mantenha a embalagem original, sem sinais de uso, com todos os acessórios e manuais.
-- O frete de devolução é por conta da loja.
-- O reembolso será na mesma forma de pagamento original em até 10 dias úteis.
+O produto deve estar na embalagem original, sem sinais de uso, com todos os acessórios e manuais. O frete de devolução é por conta da loja e o reembolso será realizado na mesma forma de pagamento original em até 10 dias úteis.
 
-Posso te ajudar a marcar o envio? Há algo mais que eu possa fazer por você?
+Posso ajudar em mais alguma coisa?
 
 ------------------------------------------------------------------------
-Tools chamadas por turno: - | verify_customer | check_return_eligibility
-Latência por turno: 479 ms | 883 ms | 17255 ms
-Tokens: 13965 entrada, 934 saída
-Custo estimado: US$ 0.002356
+Tools chamadas por turno: - | verify_customer, check_return_eligibility | check_return_eligibility
+Latência por turno: 1101 ms | 2928 ms | 3942 ms
+Tokens: 19079 entrada, 508 saída
+Custo estimado: US$ 0.003005
