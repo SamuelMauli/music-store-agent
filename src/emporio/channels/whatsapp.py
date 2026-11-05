@@ -12,7 +12,9 @@ import logging
 import threading
 import time
 import uuid
+from collections import deque
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Any
 
@@ -43,7 +45,6 @@ RETURN_NOTICE = "Atendimento humano concluído. Voltei a ajudar por aqui: é só
 MEDIA_PLACEHOLDER = "[mensagem não textual: {kind}]"
 _IGNORED_KINDS = frozenset({"reaction", "system", "request_welcome", "ephemeral"})
 _PREVIEW_CHARS = 80
-_LOCKS = 64
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,6 +115,8 @@ class WhatsAppChannel:
         pepper: str,
         max_message_chars: int,
         handoff_ttl_seconds: float,
+        workers: int = 4,
+        queue_size: int = 64,
         now: Callable[[], float] = time.time,
     ) -> None:
         """Cria o canal.
@@ -127,16 +130,79 @@ class WhatsAppChannel:
             pepper: Pepper do HMAC do telefone.
             max_message_chars: Teto do texto aceito do cliente.
             handoff_ttl_seconds: Janela sem ação do operador até voltar ao bot.
+            workers: Threads dedicadas ao processamento (teto; o pool do servidor fica livre).
+            queue_size: Mensagens aceitas além dos workers; acima disso descarta com log.
             now: Relógio de parede (epoch); injetável nos testes.
         """
         self._service, self._sender, self._store = service, sender, store
         self._dedup, self._limiter, self._pepper = dedup, limiter, pepper
         self._max_chars, self._ttl, self._now = max_message_chars, handoff_ttl_seconds, now
-        self._locks = [threading.Lock() for _ in range(_LOCKS)]
+        self._pool = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="wa-worker")
+        self._capacity = workers + queue_size
+        self._mutex = threading.Lock()
+        self._idle = threading.Condition(self._mutex)
+        self._inflight = 0  # aceitas e ainda não terminadas (rodando + na fila)
+        # conversa -> mensagens que chegaram enquanto o worker dela estava ocupado; a presença
+        # da chave é o "trinco" da conversa (sem bloquear thread nenhuma esperando por ela).
+        self._waiting: dict[str, deque[InboundMessage]] = {}
 
     def conversation_id(self, phone: str) -> str:
         """Id opaco do contato."""
         return contact_id(self._pepper, phone)
+
+    # --- entrada assíncrona (pool dedicado, fila limitada) --------------------------------
+    def submit(self, message: InboundMessage) -> bool:
+        """Agenda a mensagem num worker sem bloquear quem chama; ``False`` se descartada.
+
+        Mensagens da mesma conversa são processadas em ordem, uma por vez, pelo mesmo worker
+        (as que chegam no meio ficam numa fila da conversa, não prendem thread). Com
+        ``workers + queue_size`` mensagens em andamento, as excedentes são descartadas com log.
+        """
+        conv_id = self.conversation_id(message.sender)
+        with self._mutex:
+            if self._inflight >= self._capacity:
+                log.warning("fila do canal cheia; mensagem descartada contato=%s", conv_id[:12])
+                return False
+            self._inflight += 1
+            if conv_id in self._waiting:
+                self._waiting[conv_id].append(message)  # o worker da conversa pega em seguida
+                return True
+            self._waiting[conv_id] = deque()
+        try:
+            self._pool.submit(self._drain, conv_id, message)
+        except RuntimeError:  # pool já encerrado (shutdown)
+            self._finish(conv_id, discard=True)
+            log.warning("canal encerrando; mensagem descartada contato=%s", conv_id[:12])
+            return False
+        return True
+
+    def _drain(self, conv_id: str, first: InboundMessage) -> None:
+        """Roda no worker: processa a mensagem e depois as que se acumularam na conversa."""
+        current: InboundMessage | None = first
+        while current is not None:
+            self.handle(current)  # nunca levanta
+            current = self._finish(conv_id)
+
+    def _finish(self, conv_id: str, *, discard: bool = False) -> InboundMessage | None:
+        """Dá baixa em uma mensagem; devolve a próxima da conversa ou libera o trinco."""
+        with self._mutex:
+            self._inflight -= 1
+            waiting = self._waiting[conv_id]
+            nxt = None if discard else (waiting.popleft() if waiting else None)
+            if nxt is None:
+                del self._waiting[conv_id]
+            if self._inflight == 0:
+                self._idle.notify_all()
+            return nxt
+
+    def drain(self, timeout: float = 30.0) -> bool:
+        """Espera o que está em andamento terminar (testes e shutdown); ``False`` no timeout."""
+        with self._idle:
+            return self._idle.wait_for(lambda: self._inflight == 0, timeout)
+
+    def close(self) -> None:
+        """Encerra o pool: o que está rodando termina, o que está na fila é descartado."""
+        self._pool.shutdown(wait=True, cancel_futures=True)
 
     # --- cliente -> bot ou fila ---------------------------------------------------------
     def handle(self, message: InboundMessage) -> None:
@@ -147,8 +213,7 @@ class WhatsAppChannel:
                 log.info("reentrega ignorada contato=%s", conv_id[:12])
                 return
             self._limiter.check(conv_id)
-            with self._locks[int(conv_id[:8], 16) % _LOCKS]:
-                self._route(conv_id, message)
+            self._route(conv_id, message)
         except RateLimitedError:
             log.warning("limite por número excedido contato=%s", conv_id[:12])
         except Exception:

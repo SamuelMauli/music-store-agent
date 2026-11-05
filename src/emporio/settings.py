@@ -9,7 +9,7 @@ from typing import Literal, Self
 from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
-from pydantic import BaseModel, SecretStr, model_validator
+from pydantic import BaseModel, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _STORE_TZ = "America/Campo_Grande"
@@ -116,6 +116,8 @@ class Settings(BaseSettings):
         operator_api_keys: Chaves dos endpoints de operador (distintas de ``api_keys``).
         whatsapp_api_version: Versão da Graph API (premissa configurável).
         whatsapp_rate_limit_per_minute: Mensagens por número por minuto.
+        whatsapp_workers: Threads dedicadas ao canal (teto de concorrência do WhatsApp).
+        whatsapp_queue_size: Mensagens aceitas além dos workers; as excedentes são descartadas.
         whatsapp_handoff_ttl_seconds: Sem ação do operador por este tempo, a conversa volta
             ao bot. Premissa de produto (4h), sem fonte externa: ajuste ao SLA da loja.
         handoff_path: SQLite do handoff (usado sem ``redis_url``).
@@ -186,6 +188,8 @@ class Settings(BaseSettings):
     whatsapp_api_version: str = "v21.0"
     whatsapp_rate_limit_per_minute: int = 10
     whatsapp_handoff_ttl_seconds: int = 14_400
+    whatsapp_workers: int = Field(default=4, ge=1, le=64)
+    whatsapp_queue_size: int = Field(default=64, ge=1)
     handoff_path: Path = Path("data/handoff.sqlite")
 
     def price_for(self, model: str, tier: Literal["small", "medium"]) -> tuple[float, float]:

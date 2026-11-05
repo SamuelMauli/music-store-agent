@@ -296,7 +296,7 @@ def build_whatsapp_channel(
         transport=transport,
     )
     closers.append(sender.close)
-    return WhatsAppChannel(
+    channel = WhatsAppChannel(
         service,
         sender,
         store,
@@ -305,5 +305,9 @@ def build_whatsapp_channel(
         pepper=secret_value(settings.whatsapp_hash_pepper),
         max_message_chars=settings.max_message_chars,
         handoff_ttl_seconds=settings.whatsapp_handoff_ttl_seconds,
+        workers=settings.whatsapp_workers,
+        queue_size=settings.whatsapp_queue_size,
         now=now,
     )
+    closers.insert(0, channel.close)  # 1º: o pool para antes de fechar store e sender
+    return channel

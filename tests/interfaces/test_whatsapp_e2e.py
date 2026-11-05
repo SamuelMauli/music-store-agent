@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import json
 import logging
+import threading
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any
@@ -18,6 +19,7 @@ from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
 from emporio.bootstrap import Container, build_container
+from emporio.channels.whatsapp import InboundMessage, WhatsAppChannel
 from emporio.interfaces.api import create_app
 from emporio.settings import Settings
 from tests.agent.conftest import fake_settings
@@ -48,11 +50,17 @@ class World:
     def post(self, payload: dict[str, Any], *, key: str | None = None) -> httpx.Response:
         raw = json.dumps(payload).encode()
         digest = hmac.new((key or APP_SECRET).encode(), raw, hashlib.sha256).hexdigest()
-        return self.client.post(
+        response = self.client.post(
             "/webhooks/whatsapp",
             content=raw,
             headers={"X-Hub-Signature-256": f"sha256={digest}", "Content-Type": "application/json"},
         )
+        assert self.channel.drain(), "o canal não terminou de processar"  # o 200 vem antes
+        return response
+
+    @property
+    def channel(self) -> WhatsAppChannel:
+        return self.client.app.state.whatsapp  # type: ignore[attr-defined,no-any-return]
 
     def say(self, phone: str, text: str, message_id: str | None = None) -> httpx.Response:
         self.seq += 1
@@ -576,3 +584,105 @@ def test_operator_credentials_accept_legacy_key_without_name(ingested: Settings)
     assert ana == ("ana", "k1")
     assert legacy[0].startswith("operador-")
     assert legacy[1] == "so-a-chave"
+
+
+def test_flood_uses_at_most_the_dedicated_workers_and_chat_stays_responsive(
+    ingested: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Muitos números com o LLM travado: só ``workers`` threads, 200 imediato, /v1/chat segue."""
+    workers, queue = 2, 3
+    settings = fake_settings(
+        ingested,
+        api_keys=[SecretStr(CHAT_KEY)],
+        operator_api_keys=[SecretStr(f"ana:{OPERATOR_KEY}")],
+        whatsapp_verify_token=SecretStr(VERIFY_TOKEN),
+        whatsapp_app_secret=SecretStr(APP_SECRET),
+        whatsapp_access_token=SecretStr("token-graph"),
+        whatsapp_phone_number_id=PHONE_ID,
+        whatsapp_hash_pepper=SecretStr("pepper-de-teste"),
+        whatsapp_workers=workers,
+        whatsapp_queue_size=queue,
+        handoff_path=":memory:",
+        rate_limit_per_minute=1000,
+    )
+    container = build_container(settings)
+    real_chat = container.service.chat
+    gate = threading.Event()
+    running = {"now": 0, "peak": 0}
+    lock = threading.Lock()
+
+    def slow_chat(session_id: str, text: str, request_id: str, *args: Any, **kw: Any) -> Any:
+        if not session_id.startswith("wa-"):
+            return real_chat(session_id, text, request_id, *args, **kw)
+        with lock:
+            running["now"] += 1
+            running["peak"] = max(running["peak"], running["now"])
+        gate.wait(10)
+        with lock:
+            running["now"] -= 1
+        return real_chat(session_id, text, request_id, *args, **kw)
+
+    monkeypatch.setattr(container.service, "chat", slow_chat)
+    sent: list[dict[str, Any]] = []
+
+    def graph(request: httpx.Request) -> httpx.Response:
+        sent.append(json.loads(request.content))
+        return httpx.Response(200)
+
+    app = create_app(settings, container, whatsapp_transport=httpx.MockTransport(graph))
+    with TestClient(app) as client:
+        channel: WhatsAppChannel = app.state.whatsapp
+        total = workers + queue + 4  # 4 além da capacidade
+        for i in range(total):
+            payload = inbound(f"55679999{i:05d}", "Qual o horário de vocês?", f"wamid.flood{i}")
+            raw = json.dumps(payload).encode()
+            sig = hmac.new(APP_SECRET.encode(), raw, hashlib.sha256).hexdigest()
+            response = client.post(
+                "/webhooks/whatsapp",
+                content=raw,
+                headers={"X-Hub-Signature-256": f"sha256={sig}"},
+            )
+            assert response.status_code == 200  # nunca espera o LLM
+        alive = [t for t in threading.enumerate() if t.name.startswith("wa-worker")]
+        assert len(alive) <= workers
+        assert client.get("/healthz").status_code == 200  # o servidor segue livre
+        chat = client.post(
+            "/v1/chat", headers={"X-API-Key": CHAT_KEY}, json={"message": "Quais os horários?"}
+        )
+        assert chat.status_code == 200
+        gate.set()
+        assert channel.drain(30)
+    assert running["peak"] <= workers
+    assert len({m["to"] for m in sent}) == workers + queue  # o excedente foi descartado
+    container.close()
+
+
+def test_same_conversation_is_processed_in_order_one_at_a_time(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    order: list[str] = []
+    active = {"now": 0, "peak": 0}
+    lock = threading.Lock()
+    service = world.client.app.state.container.service  # type: ignore[attr-defined]
+    real_chat = service.chat
+
+    def tracked(session_id: str, text: str, request_id: str, *a: Any, **k: Any) -> Any:
+        with lock:
+            active["now"] += 1
+            active["peak"] = max(active["peak"], active["now"])
+        order.append(text)
+        try:
+            return real_chat(session_id, text, request_id, *a, **k)
+        finally:
+            with lock:
+                active["now"] -= 1
+
+    monkeypatch.setattr(service, "chat", tracked)
+    for i in range(4):  # direto no canal, sem esperar entre uma e outra (concorrência real)
+        message = InboundMessage(
+            f"wamid.ord{i}", CUSTOMER, "text", f"Pergunta {i}: qual o horário?"
+        )
+        assert world.channel.submit(message)
+    assert world.channel.drain(30)
+    assert order == [f"Pergunta {i}: qual o horário?" for i in range(4)]
+    assert active["peak"] == 1

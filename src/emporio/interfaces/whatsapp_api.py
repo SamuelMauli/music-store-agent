@@ -9,12 +9,12 @@ import logging
 import re
 from typing import Annotated, Any
 
-from fastapi import APIRouter, BackgroundTasks, Path, Query, Request, Response
+from fastapi import APIRouter, Path, Query, Request, Response
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 
 from emporio.adapters.whatsapp.client import MAX_TEXT_CHARS
-from emporio.channels.whatsapp import InboundMessage, WhatsAppChannel, parse_webhook
+from emporio.channels.whatsapp import WhatsAppChannel, parse_webhook
 from emporio.domain.errors import OperatorMismatchError
 from emporio.domain.handoff import HandoffConversation
 from emporio.interfaces.middleware import OPERATOR_PREFIX, WEBHOOK_PATH, error_response
@@ -88,11 +88,6 @@ def channel_of(request: Request) -> WhatsAppChannel:
     return channel
 
 
-def _process(channel: WhatsAppChannel, messages: list[InboundMessage]) -> None:
-    for message in messages:
-        channel.handle(message)
-
-
 def build_router(*, verify_token: str, app_secret: str, phone_number_id: str) -> APIRouter:
     """Rotas do canal: webhook da Meta e endpoints de operador."""
     router = _webhook_router(verify_token, app_secret, phone_number_id)
@@ -118,7 +113,7 @@ def _webhook_router(verify_token: str, app_secret: str, phone_number_id: str) ->
         return PlainTextResponse(challenge)
 
     @router.post(WEBHOOK_PATH, include_in_schema=False)
-    async def receive(request: Request, background: BackgroundTasks) -> Response:
+    async def receive(request: Request) -> Response:
         rid = str(getattr(request.state, "request_id", ""))
         body = await request.body()  # corpo BRUTO: a assinatura cobre os bytes, não o JSON
         signature = request.headers.get("x-hub-signature-256", "")
@@ -130,8 +125,9 @@ def _webhook_router(verify_token: str, app_secret: str, phone_number_id: str) ->
         except ValueError:
             return error_response(400, "invalid_request", "Corpo não é JSON.", rid)
         messages = parse_webhook(payload, phone_number_id)
-        if messages:  # responde 200 já; o agente (lento) roda depois, fora do ciclo da resposta
-            background.add_task(_process, channel_of(request), messages)
+        channel = channel_of(request)
+        for message in messages:  # 200 já; o agente (lento) roda no pool dedicado do canal
+            channel.submit(message)
         return JSONResponse({"status": "ok"})
 
     return router
