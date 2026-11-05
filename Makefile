@@ -1,6 +1,11 @@
-.PHONY: llm-check docker-build compose-up compose-down setup ingest chat api test lint typecheck check eval-retrieval eval eval-replay eval-live examples
+.PHONY: llm-check docker-build compose-up compose-down setup setup-min ingest chat api test lint typecheck check eval-retrieval eval eval-replay eval-live examples
 
+# ambiente de desenvolvimento = ambiente do CI (todos os extras): make check passa sem ajuste
 setup:
+	uv sync --frozen --all-extras
+
+# só a dependência base (runtime enxuto); provedores e estado compartilhado ficam de fora
+setup-min:
 	uv sync --frozen
 
 ingest:
