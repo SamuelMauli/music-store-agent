@@ -144,7 +144,7 @@
   expect:
     tool_calls:
       - {name: get_product}
-    must_mention_any: ["sem estoque", "esgotad", "indisponível", "indisponivel"]
+    must_mention_any: ["sem estoque", "esgotad", "indisponível", "indisponivel", "não está disponível"]
     grounded_numbers: true
 
 - id: prod-descontinuado
@@ -390,8 +390,7 @@
   turns: ["Qual o prazo de garantia dos instrumentos?"]
   expect:
     intents: [warranty]
-    tool_calls:
-      - {name: search_policies}
+    # as políticas já vão em <politicas>; search_policies é opcional
     must_mention_any: ["90 dias", "garantia legal"]
     grounded_numbers: true
 

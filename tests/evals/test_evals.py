@@ -475,7 +475,9 @@ def test_judge_requires_a_model_and_live_mode(monkeypatch: pytest.MonkeyPatch) -
 
 
 def test_latest_live_report_matches_current_prompt() -> None:
-    reports = sorted((EVALS / "reports").glob("live-*.json"))
+    # ordena pelo timestamp do nome: "live-claude-..." não passa na frente por ordem alfabética
+    found = (EVALS / "reports").glob("live-*.json")
+    reports = sorted(found, key=lambda p: p.stem.rsplit("-", 1)[-1])
     if not reports:
         pytest.skip("nenhum relatório ao vivo ainda")
     report = json.loads(reports[-1].read_text(encoding="utf-8"))
