@@ -5,25 +5,26 @@ Provider: google
 Nota: e-mails/telefones do cliente aparecem mascarados na transcrição; o agente recebeu o valor real.
 ------------------------------------------------------------------------
 Cliente: A Tagima Woodstock ainda está com 30% da Black Friday?
-Tom: Oi! Eu sou o Tom, assistente virtual da Empório da Música, e você pode pedir um atendente humano quando quiser. A promoção da Black Friday da Tagima Woodstock Dreadnought Natural já encerrou. O preço dela é R$ 899,00, com opção no PIX por R$ 854,05 e parcelamento em até 8x de R$ 112,38 sem juros. Temos 11 unidades em estoque.
+Tom: Oi! Eu sou o Tom, assistente virtual da Empório da Música, e você pode pedir um atendente humano quando quiser. A promoção de Black Friday da Tagima Woodstock Dreadnought Natural já encerrou. O preço atual é R$ 899,00 ou R$ 854,05 no PIX, com parcelamento em até 8x de R$ 112,38 sem juros. 
 
-Posso ajudar com mais alguma coisa?
+Posso te ajudar com mais alguma informação sobre esse modelo?
 
 Cliente: Quanto fica ela no PIX?
-Tom: Poderia me confirmar a qual modelo você se refere?
+Tom: A Tagima Woodstock Dreadnought Natural sai por R$ 854,05 no PIX. A promoção Black Friday deste produto foi encerrada e não está mais valendo.
+
+Posso te ajudar com mais alguma coisa sobre ela?
 
 Cliente: E o Giannini GF-3D, ainda tem a promoção Semana do Músico?
-Tom: A promoção Semana do Músico para o Giannini GF-3D Dreadnought Sunburst já encerrou. No momento, o modelo está sem estoque, mas o preço vigente é R$ 799,90, com valor no PIX por R$ 759,91 e parcelamento em até 7x de R$ 114,27 sem juros.
+Tom: A promoção Semana do Músico do Giannini GF-3D Dreadnought Sunburst já encerrou. No momento ele está sem estoque, mas temos ótimas alternativas disponíveis:
 
-Como alternativas disponíveis, temos:
 - Shelby SGD-195E Elétrico Aço Sunburst por R$ 799,00
 - Yamaha C70 Nylon Natural por R$ 849,00
 - Tagima Dallas Tuner Aço Natural por R$ 749,00
 
-Posso ajudar com mais alguma coisa?
+Posso te ajudar com alguma dessas opções?
 
 ------------------------------------------------------------------------
-Tools chamadas por turno: get_product, list_active_promotions | - | get_product, find_alternatives
-Latência por turno: 16843 ms | 1391 ms | 16687 ms
-Tokens: 12979 entrada, 808 saída
-Custo estimado: US$ 0.002177
+Tools chamadas por turno: get_product, list_active_promotions | get_product | get_product, find_alternatives
+Latência por turno: 6638 ms | 5004 ms | 4908 ms
+Tokens: 17937 entrada, 783 saída
+Custo estimado: US$ 0.002878

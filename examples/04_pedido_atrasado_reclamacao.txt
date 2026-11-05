@@ -8,17 +8,17 @@ Cliente: Onde está meu pedido 8?
 Tom: Oi! Eu sou o Tom, assistente virtual da Empório da Música, e você pode pedir um atendente humano quando quiser. Obrigado! Agora preciso do e-mail ou do telefone cadastrado na compra, para confirmar que o pedido é seu.
 
 Cliente: a***@coldmail.com
-Tom: Ana, o seu pedido 8 está com status enviado, em trânsito. A previsão inicial era para 28/02/2026 e ele está atrasado há 25 dia(s) em relação à previsão. O código de rastreio é BRJL5544332BR.
+Tom: O pedido 8 está com status enviado, em trânsito, com previsão de entrega para 28/02/2026. Consta que está atrasado há 25 dia(s) em relação à previsão. O código de rastreio é BRJL5544332BR. 
 
-Posso te ajudar em mais alguma coisa?
+Posso ajudar em mais alguma coisa?
 
 Cliente: Isso é um absurdo, já passou do prazo. Quero reclamar e falar com alguém.
-Tom: Sinto muito por esse atraso e por todo o transtorno com o seu pedido, Ana. Registrei a sua reclamação sob o protocolo EMP-20260325-0001 e a nossa equipe vai retornar em até 24 horas úteis para resolver isso. Já encaminei o seu pedido para atendimento humano prioritário.
+Tom: Compreendo perfeitamente a sua frustração com o atraso e peço desculpas por esse transtorno. Registrei a sua reclamação sob o protocolo EMP-20260325-0001, com prazo de retorno em até 24 horas úteis, e já acionei nossa equipe para verificarmos o que ocorreu com a entrega junto à transportadora. 
 
-Posso ajudar com mais alguma coisa?
+Posso ajudar em mais alguma coisa?
 
 ------------------------------------------------------------------------
 Tools chamadas por turno: - | verify_customer, get_order_status | open_ticket
-Latência por turno: 1270 ms | 10315 ms | 3720 ms
-Tokens: 12688 entrada, 534 saída
-Custo estimado: US$ 0.002067
+Latência por turno: 11741 ms | 3956 ms | 11063 ms
+Tokens: 13248 entrada, 505 saída
+Custo estimado: US$ 0.002113

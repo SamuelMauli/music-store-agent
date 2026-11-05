@@ -5,7 +5,7 @@ Provider: google
 Nota: e-mails/telefones do cliente aparecem mascarados na transcrição; o agente recebeu o valor real.
 ------------------------------------------------------------------------
 Cliente: Quais violões vocês têm até R$ 1.000?
-Tom: Oi! Eu sou o Tom, assistente virtual da Empório da Música, e você pode pedir um atendente humano quando quiser. Encontrei 12 violões no total e estou mostrando alguns para você:
+Tom: Oi! Eu sou o Tom, assistente virtual da Empório da Música, e você pode pedir um atendente humano quando quiser. Encontrei 12 opções de violões até R$ 1.000,00 por aqui. Estou te mostrando alguns dos modelos disponíveis:
 
 - Tagima Memphis AC-39 Nylon Natural: R$ 429,90
 - Rozini RC-104 Nylon Estudante: R$ 459,90
@@ -13,7 +13,7 @@ Tom: Oi! Eu sou o Tom, assistente virtual da Empório da Música, e você pode p
 - Giannini GF-1R Aço Folk Sunburst: R$ 579,90
 - Yamaha C40 Nylon Natural: R$ 599,90
 
-Posso te ajudar com mais alguma informação sobre esses modelos?
+Posso te ajudar com mais alguma coisa?
 
 Cliente: E quanto fica o Yamaha C40 no PIX?
 Tom: O Yamaha C40 Nylon Natural sai por R$ 569,91 no PIX.
@@ -22,6 +22,6 @@ Posso te ajudar com mais alguma coisa?
 
 ------------------------------------------------------------------------
 Tools chamadas por turno: search_products | get_product, simulate_payment
-Latência por turno: 18105 ms | 7301 ms
-Tokens: 20911 entrada, 558 saída
-Custo estimado: US$ 0.003299
+Latência por turno: 5700 ms | 6278 ms
+Tokens: 21335 entrada, 567 saída
+Custo estimado: US$ 0.003349

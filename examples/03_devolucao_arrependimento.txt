@@ -8,17 +8,19 @@ Cliente: Quero devolver o pedido 7
 Tom: Oi! Eu sou o Tom, assistente virtual da Empório da Música, e você pode pedir um atendente humano quando quiser. Obrigado! Agora preciso do e-mail ou do telefone cadastrado na compra, para confirmar que o pedido é seu.
 
 Cliente: l***@jmail.com
-Tom: A compra foi feita online ou na loja?
+Tom: A compra do pedido 7 foi feita na loja física ou pelo site?
 
 Cliente: comprei online
-Tom: Sua devolução por arrependimento é elegível, conforme §4.1. Estamos no dia 4 de 7 dias corridos, restando 3 dias. O prazo vai até 24/02/2026 e é contado da entrega estimada, pois o pedido não registra a data de recebimento.
+Tom: Pode sim, Letícia! Como a compra foi online, o pedido 7 está elegível para devolução por arrependimento, conforme §4.1. 
 
-O produto deve estar na embalagem original, sem sinais de uso, com todos os acessórios e manuais. O frete de devolução é por conta da loja e o reembolso será realizado na mesma forma de pagamento original em até 10 dias úteis.
+A solicitação está dentro do prazo e você está no dia 4 de 7 dias corridos, restando 3 dias. O prazo limite para devolução é 24/02/2026. 
 
-Posso ajudar em mais alguma coisa?
+Para a devolução, o produto deve estar em sua embalagem original, sem sinais de uso, com todos os acessórios e manuais. O frete de devolução é por conta da loja e o reembolso será realizado na mesma forma de pagamento original em até 10 dias úteis.
+
+Posso te ajudar com mais alguma coisa?
 
 ------------------------------------------------------------------------
 Tools chamadas por turno: - | verify_customer, check_return_eligibility | check_return_eligibility
-Latência por turno: 1101 ms | 2928 ms | 3942 ms
-Tokens: 19079 entrada, 508 saída
-Custo estimado: US$ 0.003005
+Latência por turno: 3174 ms | 4168 ms | 54618 ms
+Tokens: 19497 entrada, 521 saída
+Custo estimado: US$ 0.003061

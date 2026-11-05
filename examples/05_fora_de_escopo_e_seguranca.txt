@@ -15,6 +15,6 @@ Tom: Não consegui confirmar com esses dados. Confere o número do pedido e o e-
 
 ------------------------------------------------------------------------
 Tools chamadas por turno: - | - | verify_customer
-Latência por turno: 1292 ms | 10 ms | 1213 ms
-Tokens: 895 entrada, 287 saída
-Custo estimado: US$ 0.000154
+Latência por turno: 17843 ms | 5 ms | 1498 ms
+Tokens: 1151 entrada, 251 saída
+Custo estimado: US$ 0.000161
