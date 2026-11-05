@@ -460,7 +460,7 @@ Todas as medições abaixo foram executadas de fato; o número entre parênteses
 
 | Medida | Resultado | Comando |
 | --- | --- | --- |
-| Testes | **766 passed, 14 skipped** | `make test` |
+| Testes | **767 passed, 13 skipped** | `make test` |
 | Tipagem | `mypy --strict` limpo em **122 arquivos** | `make typecheck` |
 | Lint e formatação | ruff limpo | `make lint` |
 | Cobertura | **95%** (94,7%), piso configurado de 80% | `make test` |
