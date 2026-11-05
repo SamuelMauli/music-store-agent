@@ -13,6 +13,7 @@ from emporio.agent.nodes.deps import Deps
 from emporio.agent.nodes.finish import make_handoff, respond
 from emporio.agent.nodes.guard import make_output_guard
 from emporio.agent.nodes.intake import input_guard, make_router, scope_node
+from emporio.agent.nodes.memory import make_summarizer
 from emporio.agent.nodes.react import make_agent
 from emporio.agent.nodes.verify import make_verification
 from emporio.agent.state import ChatState
@@ -83,5 +84,7 @@ def build_graph(deps: Deps, checkpointer: BaseCheckpointSaver[Any] | None = None
         "output_guard", _after_guard, {"agent": "agent", "respond": "respond", "handoff": "handoff"}
     )
     graph.add_edge("handoff", "respond")
-    graph.add_edge("respond", END)
+    graph.add_node("summarize", make_summarizer(deps))
+    graph.add_edge("respond", "summarize")
+    graph.add_edge("summarize", END)
     return graph.compile(checkpointer=checkpointer)

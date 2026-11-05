@@ -9,13 +9,13 @@ from emporio.agent.service import ChatResult, ChatService
 from emporio.bootstrap import Container, build_container
 from emporio.clock import FixedClock
 from emporio.settings import Settings
-from tests.agent.conftest import ORDER_7_DAY
+from tests.agent.conftest import ORDER_7_DAY, fake_settings
 
 _ids = itertools.count(1)
 
 
 def _settings(ingested: Settings) -> Settings:
-    return ingested.model_copy(update={"llm_provider": "fake"})
+    return fake_settings(ingested)
 
 
 @pytest.fixture

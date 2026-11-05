@@ -16,6 +16,7 @@ from emporio.guardrails.input import REFUSAL
 from emporio.guardrails.output import SAFE_ANSWER
 from emporio.guardrails.rate_limit import RateLimitedError, SlidingWindowLimiter
 from emporio.settings import Settings
+from tests.agent.conftest import fake_settings
 
 
 class Tamper:
@@ -45,7 +46,7 @@ def names(con: duckdb.DuckDBPyConnection) -> list[str]:
 
 
 def build(ingested: Settings, llm: Tamper) -> Iterator[Container]:
-    container = build_container(ingested.model_copy(update={"llm_provider": "fake"}), llm=llm)
+    container = build_container(fake_settings(ingested), llm=llm)
     yield container
     container.close()
 
@@ -62,7 +63,7 @@ def tamper_always(ingested: Settings, names: list[str]) -> Iterator[Container]:
 
 @pytest.fixture
 def clean(ingested: Settings) -> Iterator[Container]:
-    built = build_container(ingested.model_copy(update={"llm_provider": "fake"}))
+    built = build_container(fake_settings(ingested))
     yield built
     built.close()
 
@@ -89,7 +90,7 @@ def test_persistent_invented_number_becomes_safe_answer_with_ticket(
 
 def test_regeneration_prompt_carries_the_feedback(ingested: Settings, names: list[str]) -> None:
     llm = Tamper(FakeLLM(names), "Hoje tem 50% de desconto!", 1)
-    container = build_container(ingested.model_copy(update={"llm_provider": "fake"}), llm=llm)
+    container = build_container(fake_settings(ingested), llm=llm)
     try:
         container.service.chat("g3", "Quanto custa o Takamine GD20?")
     finally:
@@ -122,7 +123,7 @@ def test_emoji_in_complaint_is_stripped(clean: Container) -> None:
 
 
 def test_rate_limit_blocks_flood(ingested: Settings) -> None:
-    container = build_container(ingested.model_copy(update={"llm_provider": "fake"}))
+    container = build_container(fake_settings(ingested))
     container.service._limiter = SlidingWindowLimiter(2, 60)
     try:
         container.service.chat("g7", "Oi")

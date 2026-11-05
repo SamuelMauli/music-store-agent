@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import sqlite3
 import threading
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from typing import Any
 
 import duckdb
 from langgraph.checkpoint.base import BaseCheckpointSaver
-from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.checkpoint.sqlite import SqliteSaver
 
 from emporio.adapters.persistence import (
     DuckDbCustomerRepository,
@@ -16,7 +19,7 @@ from emporio.adapters.persistence import (
     DuckDbProductRepository,
     DuckDbPromotionRepository,
 )
-from emporio.adapters.persistence.memory_tickets import InMemoryTicketRepository
+from emporio.adapters.persistence.sqlite_tickets import SqliteTicketRepository
 from emporio.adapters.retrieval import retriever_factory
 from emporio.agent.graph import build_graph
 from emporio.agent.llm import factory
@@ -36,9 +39,12 @@ class Container:
     service: ChatService
     registry: ToolRegistry
     connection: duckdb.DuckDBPyConnection
+    closers: list[Callable[[], object]] = field(default_factory=list)
 
     def close(self) -> None:
-        """Libera a conexão com o DuckDB."""
+        """Libera as conexões abertas (DuckDB e SQLite)."""
+        for closer in self.closers:
+            closer()
         self.connection.close()
 
 
@@ -47,7 +53,7 @@ def build_container(
     *,
     llm: LLMProvider | None = None,
     clock: Clock | None = None,
-    checkpointer: BaseCheckpointSaver | None = None,  # type: ignore[type-arg]
+    checkpointer: BaseCheckpointSaver[Any] | None = None,
     tickets: TicketRepository | None = None,
 ) -> Container:
     """Monta o serviço de conversa.
@@ -56,8 +62,8 @@ def build_container(
         settings: Configuração.
         llm: Provedor já pronto (testes); default vem de ``settings``.
         clock: Relógio; default é o fixo de ``reference_datetime`` ou o do sistema.
-        checkpointer: Memória por sessão; default é em processo.
-        tickets: Repositório de chamados; default é em memória.
+        checkpointer: Memória por sessão; default é SQLite em ``checkpoint_path``.
+        tickets: Repositório de chamados; default é SQLite em ``tickets_path``.
 
     Returns:
         Container com o ``ChatService`` pronto.
@@ -71,14 +77,18 @@ def build_container(
     )
     sections = DuckDbPolicySectionRepository(connection).all()
     retriever = retriever_factory.build(settings, sections)
-    repo = tickets or InMemoryTicketRepository()
+    closers: list[Callable[[], object]] = []
+    if tickets is None:
+        sqlite_tickets = SqliteTicketRepository(settings.tickets_path)
+        closers.append(sqlite_tickets.close)
+        tickets = sqlite_tickets
     registry = build_registry(
         products=DuckDbProductRepository(connection),
         orders=DuckDbOrderRepository(connection),
         customers=DuckDbCustomerRepository(connection),
         promotions=DuckDbPromotionRepository(connection),
         retriever=retriever,
-        tickets=repo,
+        tickets=tickets,
         clock=use_clock,
         metro_cities=settings.metro_cities,
         lock=lock,
@@ -86,5 +96,11 @@ def build_container(
     if llm is None:
         names = [r[0] for r in connection.execute("select name from silver.products").fetchall()]
         llm = factory.build(settings, names)
-    graph = build_graph(Deps(llm, registry, retriever, use_clock), checkpointer or InMemorySaver())
-    return Container(ChatService(graph), registry, connection)
+    if checkpointer is None:
+        if str(settings.checkpoint_path) != ":memory:":
+            settings.checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+        memory = sqlite3.connect(str(settings.checkpoint_path), check_same_thread=False)
+        closers.append(memory.close)
+        checkpointer = SqliteSaver(memory)
+    graph = build_graph(Deps(llm, registry, retriever, use_clock), checkpointer)
+    return Container(ChatService(graph), registry, connection, closers)

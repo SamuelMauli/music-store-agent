@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -20,11 +21,23 @@ from emporio.adapters.retrieval.long_context import LongContextRetriever
 from emporio.agent.tools import ToolContext, ToolExecution, ToolRegistry, build_registry
 from emporio.clock import FixedClock
 from emporio.ports import Clock
+from emporio.settings import Settings
 
 TZ = ZoneInfo("America/Campo_Grande")
 ORDER_7_DAY = datetime(2026, 2, 21, 10, 0, tzinfo=TZ)  # cenário Gherkin de arrependimento
 
 Caller = Callable[..., ToolExecution]
+
+
+def fake_settings(base: Settings, **extra: Any) -> Settings:
+    """Settings com LLM fake e SQLite em memória (nada vai ao disco)."""
+    fields: dict[str, Any] = {
+        "llm_provider": "fake",
+        "checkpoint_path": Path(":memory:"),
+        "tickets_path": Path(":memory:"),
+        **extra,
+    }
+    return base.model_copy(update=fields)
 
 
 @pytest.fixture
