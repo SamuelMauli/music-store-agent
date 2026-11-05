@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import json
 import logging
+import re
 from typing import Annotated, Any
 
 from fastapi import APIRouter, BackgroundTasks, Path, Query, Request, Response
@@ -14,6 +15,7 @@ from pydantic import BaseModel, Field
 
 from emporio.adapters.whatsapp.client import MAX_TEXT_CHARS
 from emporio.channels.whatsapp import InboundMessage, WhatsAppChannel, parse_webhook
+from emporio.domain.errors import OperatorMismatchError
 from emporio.domain.handoff import HandoffConversation
 from emporio.interfaces.middleware import OPERATOR_PREFIX, WEBHOOK_PATH, error_response
 
@@ -24,10 +26,22 @@ _CHALLENGE = r"^[\w-]{1,128}$"
 SIGNATURE_PREFIX = "sha256="
 
 
-class OperatorBody(BaseModel):
-    """Quem age. A chave de API é compartilhada pela equipe: o nome só rotula o dono."""
+OPERATOR_NAME = re.compile(r"^[\w .@-]{1,64}$")
 
-    operator: str = Field(pattern=r"^[\w .@-]{1,64}$")
+
+class OperatorBody(BaseModel):
+    """Corpo das ações de operador. Quem age vem da chave de API (cada operador tem a sua);
+    ``operator`` é opcional e, se enviado, tem de ser o dono da chave (senão 403)."""
+
+    operator: str | None = Field(default=None, pattern=OPERATOR_NAME.pattern)
+
+
+def acting_operator(request: Request, body: OperatorBody) -> str:
+    """Operador autenticado pela chave; recusa um nome de corpo que difira dele."""
+    name = str(request.state.operator)
+    if body.operator is not None and body.operator != name:
+        raise OperatorMismatchError("O operador informado não é o dono da chave de API.")
+    return name
 
 
 class ReplyBody(OperatorBody):
@@ -142,21 +156,21 @@ def _operator_router() -> APIRouter:
         request: Request, conv_id: Annotated[str, Path(pattern=CONV_ID)], body: OperatorBody
     ) -> dict[str, Any]:
         channel = channel_of(request)
-        conversation = channel.claim(conv_id, body.operator)
+        conversation = channel.claim(conv_id, acting_operator(request, body))
         return _detail(conversation, channel.preview(conversation))
 
     @router.post(OPERATOR_PREFIX + "handoffs/{conv_id}/reply")
     def reply(
         request: Request, conv_id: Annotated[str, Path(pattern=CONV_ID)], body: ReplyBody
     ) -> dict[str, str]:
-        channel_of(request).reply(conv_id, body.operator, body.text)
+        channel_of(request).reply(conv_id, acting_operator(request, body), body.text)
         return {"status": "sent"}
 
     @router.post(OPERATOR_PREFIX + "handoffs/{conv_id}/release")
     def release(
         request: Request, conv_id: Annotated[str, Path(pattern=CONV_ID)], body: OperatorBody
     ) -> dict[str, str]:
-        channel_of(request).release(conv_id, body.operator)
+        channel_of(request).release(conv_id, acting_operator(request, body))
         return {"status": "released"}
 
     return router

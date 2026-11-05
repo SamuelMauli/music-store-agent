@@ -25,6 +25,7 @@ from emporio.domain.errors import (
     HandoffConflictError,
     HandoffNotFoundError,
     MessageDeliveryError,
+    OperatorMismatchError,
 )
 from emporio.guardrails.rate_limit import RateLimitedError
 from emporio.guardrails.session import InvalidSessionError, SessionSigner
@@ -35,7 +36,7 @@ from emporio.interfaces.middleware import (
     ApiGuard,
     error_response,
 )
-from emporio.interfaces.whatsapp_api import build_router
+from emporio.interfaces.whatsapp_api import OPERATOR_NAME, build_router
 from emporio.observability.logging import configure_logging, session_hash
 from emporio.observability.metrics import CONTENT_TYPE, Metrics
 from emporio.production import ensure_production_ready
@@ -161,6 +162,10 @@ def _register_errors(app: FastAPI) -> None:
     async def handoff_conflict(request: Request, exc: HandoffConflictError) -> JSONResponse:
         return error_response(409, "handoff_conflict", str(exc), _request_id(request))
 
+    @app.exception_handler(OperatorMismatchError)
+    async def operator_mismatch(request: Request, exc: OperatorMismatchError) -> JSONResponse:
+        return error_response(403, "operator_mismatch", str(exc), _request_id(request))
+
     @app.exception_handler(MessageDeliveryError)
     async def delivery_failed(request: Request, exc: MessageDeliveryError) -> JSONResponse:
         log.warning("entrega ao WhatsApp falhou: %s", exc)
@@ -185,7 +190,7 @@ def _install_middleware(app: FastAPI, config: Settings, metrics: Metrics | None)
         api_keys=[k.get_secret_value() for k in config.api_keys],
         max_body_bytes=_max_body_bytes(config),
         metrics=metrics,
-        operator_keys=[k.get_secret_value() for k in config.operator_api_keys],
+        operator_keys=config.operator_credentials(),
         body_limits={WEBHOOK_PATH: _WEBHOOK_MAX_BYTES, OPERATOR_PREFIX: _OPERATOR_MAX_BYTES},
     )
     if config.cors_origins:  # por último = mais externo: responde o preflight sem exigir chave
@@ -251,8 +256,15 @@ def _check_whatsapp(config: Settings) -> bool:
     if missing:
         raise ValueError("Canal WhatsApp incompleto; faltam: " + ", ".join(missing))
     chat = {k.get_secret_value() for k in config.api_keys}
-    if any(k.get_secret_value() in chat for k in config.operator_api_keys):
-        raise ValueError("EMPORIO_OPERATOR_API_KEYS não pode reutilizar chaves de EMPORIO_API_KEYS")
+    for name, key in config.operator_credentials():
+        if not key or not OPERATOR_NAME.fullmatch(name):
+            raise ValueError(
+                "EMPORIO_OPERATOR_API_KEYS: use itens 'nome:chave' (nome até 64 caracteres)"
+            )
+        if key in chat:
+            raise ValueError(
+                "EMPORIO_OPERATOR_API_KEYS não pode reutilizar chaves de EMPORIO_API_KEYS"
+            )
     return True
 
 

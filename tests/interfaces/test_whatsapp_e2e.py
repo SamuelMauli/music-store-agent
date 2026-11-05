@@ -25,7 +25,8 @@ from tests.agent.conftest import fake_settings
 APP_SECRET = "app-secret-de-teste"  # noqa: S105
 VERIFY_TOKEN = "verify-de-teste"  # noqa: S105
 PHONE_ID = "1234567890"
-OPERATOR_KEY = "operador-chave-de-teste"
+OPERATOR_KEY = "operador-chave-de-teste"  # chave da Ana
+BIA_KEY = "operadora-bia-chave-de-teste"
 CHAT_KEY = "chat-chave-de-teste"
 CUSTOMER = "5567999990001"
 OTHER_CUSTOMER = "5567999990002"
@@ -84,7 +85,8 @@ def inbound(
     }
 
 
-def operator(key: str = OPERATOR_KEY) -> dict[str, str]:
+def operator(name: str = "ana") -> dict[str, str]:
+    key = {"ana": OPERATOR_KEY, "bia": BIA_KEY}.get(name, name)
     return {"Authorization": f"Bearer {key}"}
 
 
@@ -93,7 +95,7 @@ def world(ingested: Settings) -> Iterator[World]:
     settings = fake_settings(
         ingested,
         api_keys=[SecretStr(CHAT_KEY)],
-        operator_api_keys=[SecretStr(OPERATOR_KEY)],
+        operator_api_keys=[SecretStr(f"ana:{OPERATOR_KEY}"), SecretStr(f"bia:{BIA_KEY}")],
         whatsapp_verify_token=SecretStr(VERIFY_TOKEN),
         whatsapp_app_secret=SecretStr(APP_SECRET),
         whatsapp_access_token=SecretStr("token-graph"),
@@ -311,7 +313,7 @@ def test_operator_claims_replies_and_returns_to_the_bot(world: World) -> None:
     base = f"/v1/operator/handoffs/{conv_id}"
     world.say(CUSTOMER, "Meu pedido atrasou")
 
-    claim = world.client.post(f"{base}/claim", headers=operator(), json={"operator": "ana"})
+    claim = world.client.post(f"{base}/claim", headers=operator(), json={})
     assert claim.status_code == 200
     assert claim.json()["state"] == "assigned"
     assert claim.json()["operator"] == "ana"
@@ -328,7 +330,7 @@ def test_operator_claims_replies_and_returns_to_the_bot(world: World) -> None:
         "at": detail["messages"][-1]["at"],
     }
 
-    released = world.client.post(f"{base}/release", headers=operator(), json={"operator": "ana"})
+    released = world.client.post(f"{base}/release", headers=operator(), json={})
     assert released.status_code == 200
     assert "Voltei a ajudar" in world.bodies_to(CUSTOMER)[-1]
     assert world.client.get("/v1/operator/handoffs", headers=operator()).json()["items"] == []
@@ -343,33 +345,36 @@ def test_operator_claims_replies_and_returns_to_the_bot(world: World) -> None:
 def test_reply_requires_ownership(world: World) -> None:
     conv_id = start_handoff(world)
     base = f"/v1/operator/handoffs/{conv_id}"
-    body = {"operator": "ana", "text": "oi"}
+    body = {"text": "oi"}
     assert world.client.post(f"{base}/reply", headers=operator(), json=body).status_code == 409
-    world.client.post(f"{base}/claim", headers=operator(), json={"operator": "ana"})
-    intruder = world.client.post(f"{base}/claim", headers=operator(), json={"operator": "bia"})
+    world.client.post(f"{base}/claim", headers=operator(), json={})
+    intruder = world.client.post(f"{base}/claim", headers=operator("bia"), json={})
     assert intruder.status_code == 409
     assert intruder.json()["error"]["code"] == "handoff_conflict"
     assert (
-        world.client.post(
-            f"{base}/reply", headers=operator(), json={"operator": "bia", "text": "oi"}
-        ).status_code
+        world.client.post(f"{base}/reply", headers=operator("bia"), json={"text": "oi"}).status_code
         == 409
     )
-    assert (
-        world.client.post(
-            f"{base}/release", headers=operator(), json={"operator": "bia"}
-        ).status_code
-        == 409
-    )
+    assert world.client.post(f"{base}/release", headers=operator("bia"), json={}).status_code == 409
     assert len(world.bodies_to(CUSTOMER)) == 1  # nenhuma resposta indevida saiu
+
+
+def test_operator_name_comes_from_the_key_and_a_foreign_name_is_403(world: World) -> None:
+    conv_id = start_handoff(world)
+    base = f"/v1/operator/handoffs/{conv_id}"
+    forged = world.client.post(f"{base}/claim", headers=operator("bia"), json={"operator": "ana"})
+    assert forged.status_code == 403
+    assert forged.json()["error"]["code"] == "operator_mismatch"
+    assert world.client.get(base, headers=operator()).json()["operator"] is None  # não assumiu
+    own = world.client.post(f"{base}/claim", headers=operator("bia"), json={"operator": "bia"})
+    assert own.status_code == 200
+    assert own.json()["operator"] == "bia"
 
 
 def test_unknown_conversation_is_404(world: World) -> None:
     ghost = "0" * 32
     assert world.client.get(f"/v1/operator/handoffs/{ghost}", headers=operator()).status_code == 404
-    claim = world.client.post(
-        f"/v1/operator/handoffs/{ghost}/claim", headers=operator(), json={"operator": "ana"}
-    )
+    claim = world.client.post(f"/v1/operator/handoffs/{ghost}/claim", headers=operator(), json={})
     assert claim.status_code == 404
     assert world.client.get("/v1/operator/handoffs/nao-e-id", headers=operator()).status_code == 422
 
@@ -377,7 +382,7 @@ def test_unknown_conversation_is_404(world: World) -> None:
 def test_reply_delivery_failure_is_502_and_not_recorded(ingested: Settings) -> None:
     settings = fake_settings(
         ingested,
-        operator_api_keys=[SecretStr(OPERATOR_KEY)],
+        operator_api_keys=[SecretStr(f"ana:{OPERATOR_KEY}"), SecretStr(f"bia:{BIA_KEY}")],
         whatsapp_verify_token=SecretStr(VERIFY_TOKEN),
         whatsapp_app_secret=SecretStr(APP_SECRET),
         whatsapp_access_token=SecretStr("token-graph"),
@@ -396,11 +401,9 @@ def test_reply_delivery_failure_is_502_and_not_recorded(ingested: Settings) -> N
         w = World(client)
         conv_id = start_handoff(w)
         base = f"/v1/operator/handoffs/{conv_id}"
-        client.post(f"{base}/claim", headers=operator(), json={"operator": "ana"})
+        client.post(f"{base}/claim", headers=operator(), json={})
         fail["on"] = True
-        response = client.post(
-            f"{base}/reply", headers=operator(), json={"operator": "ana", "text": "oi"}
-        )
+        response = client.post(f"{base}/reply", headers=operator(), json={"text": "oi"})
         assert response.status_code == 502
         assert response.json()["error"]["code"] == "delivery_failed"
         detail = client.get(base, headers=operator()).json()
@@ -425,7 +428,7 @@ def test_operator_activity_extends_the_expiry(world: World) -> None:
     conv_id = start_handoff(world)
     base = f"/v1/operator/handoffs/{conv_id}"
     world.clock[0] += TTL - 10
-    world.client.post(f"{base}/claim", headers=operator(), json={"operator": "ana"})
+    world.client.post(f"{base}/claim", headers=operator(), json={})
     world.clock[0] += TTL - 10  # passou do prazo original, mas o claim renovou
     assert world.client.get(base, headers=operator()).status_code == 200
 
@@ -479,9 +482,7 @@ def test_logs_never_contain_the_phone_number_or_message_text(
     with caplog.at_level(logging.DEBUG):
         conv_id = start_handoff(world)
         world.say(CUSTOMER, "mensagem-secreta-do-cliente")
-        world.client.post(
-            f"/v1/operator/handoffs/{conv_id}/claim", headers=operator(), json={"operator": "ana"}
-        )
+        world.client.post(f"/v1/operator/handoffs/{conv_id}/claim", headers=operator(), json={})
         world.client.post(
             f"/v1/operator/handoffs/{conv_id}/reply",
             headers=operator(),
@@ -540,7 +541,7 @@ def test_redis_backend_is_used_when_redis_url_is_set(
     settings = fake_settings(
         ingested,
         redis_url=SecretStr("redis://fake:6379/0"),
-        operator_api_keys=[SecretStr(OPERATOR_KEY)],
+        operator_api_keys=[SecretStr(f"ana:{OPERATOR_KEY}"), SecretStr(f"bia:{BIA_KEY}")],
         whatsapp_verify_token=SecretStr(VERIFY_TOKEN),
         whatsapp_app_secret=SecretStr(APP_SECRET),
         whatsapp_access_token=SecretStr("token-graph"),
@@ -564,3 +565,14 @@ def test_redis_backend_is_used_when_redis_url_is_set(
         assert len(sent) == 1
     assert list(fakeredis.FakeRedis(server=server).scan_iter("emporio:wa:conv:*"))
     container.close()
+
+
+def test_operator_credentials_accept_legacy_key_without_name(ingested: Settings) -> None:
+    config = fake_settings(
+        ingested,
+        operator_api_keys=[SecretStr("ana:k1"), SecretStr("so-a-chave")],
+    )
+    (ana, legacy) = config.operator_credentials()
+    assert ana == ("ana", "k1")
+    assert legacy[0].startswith("operador-")
+    assert legacy[1] == "so-a-chave"

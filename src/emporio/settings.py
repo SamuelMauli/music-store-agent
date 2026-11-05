@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from datetime import datetime
 from pathlib import Path
 from typing import Literal, Self
@@ -195,6 +196,22 @@ class Settings(BaseSettings):
             return self.llm_price_small_input, self.llm_price_small_output
         return self.llm_price_medium_input, self.llm_price_medium_output
 
+    def operator_credentials(self) -> list[tuple[str, str]]:
+        """Pares ``(nome, chave)`` de ``operator_api_keys`` (cada item é ``nome:chave``).
+
+        Item sem ``:`` (formato antigo, só a chave) ganha o nome estável ``operador-<hash>``.
+        """
+        pairs: list[tuple[str, str]] = []
+        for item in self.operator_api_keys:
+            raw = item.get_secret_value().strip()
+            if not raw:
+                continue
+            name, sep, key = raw.partition(":")
+            if not sep:
+                name, key = "operador-" + hashlib.sha256(raw.encode()).hexdigest()[:8], raw
+            pairs.append((name.strip(), key.strip()))
+        return pairs
+
     def whatsapp_missing(self) -> list[str]:
         """Variáveis do canal WhatsApp que faltam (todas faltando = canal desligado)."""
 
@@ -210,7 +227,7 @@ class Settings(BaseSettings):
             "EMPORIO_WHATSAPP_HASH_PEPPER": self.whatsapp_hash_pepper,
         }
         missing = [name for name, value in required.items() if not filled(value)]
-        if not any(filled(k) for k in self.operator_api_keys):
+        if not self.operator_credentials():
             missing.append("EMPORIO_OPERATOR_API_KEYS")
         return missing
 

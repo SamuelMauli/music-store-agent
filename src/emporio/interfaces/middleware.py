@@ -60,7 +60,7 @@ class ApiGuard:
         api_keys: Sequence[str] = (),
         max_body_bytes: int,
         metrics: Metrics | None = None,
-        operator_keys: Sequence[str] = (),
+        operator_keys: Sequence[tuple[str, str]] = (),
         body_limits: dict[str, int] | None = None,
     ) -> None:
         """Cria o middleware.
@@ -70,27 +70,30 @@ class ApiGuard:
             api_keys: Chaves aceitas; vazio deixa a API aberta (só permitido em dev).
             max_body_bytes: Maior corpo aceito (``413`` acima disso).
             metrics: Métricas HTTP; ``None`` desliga.
-            operator_keys: Chaves dos endpoints ``/v1/operator/``; vazio nega tudo ali
-                (diferente de ``api_keys``, nunca fica aberto).
+            operator_keys: Pares ``(nome, chave)`` dos endpoints ``/v1/operator/``; vazio nega
+                tudo ali (diferente de ``api_keys``, nunca fica aberto). O nome da chave que
+                autenticou vira ``request.state.operator``.
             body_limits: Limite de corpo por prefixo de caminho (vence ``max_body_bytes``).
         """
         self._app = app
         self._digests = [_digest(k) for k in api_keys if k]
-        self._operator_digests = [_digest(k) for k in operator_keys if k]
+        self._operators = [(n, _digest(k)) for n, k in operator_keys if k]
         self._body_limits = body_limits or {}
         self._max_body = max_body_bytes
         self._metrics = metrics
 
-    def _authorized(self, headers: Headers, path: str) -> bool:
+    def _identify(self, headers: Headers, path: str) -> str | None:
+        """Nome do operador ("" fora da área de operador) ou ``None`` se a chave não vale."""
         if path == WEBHOOK_PATH:
-            return True
-        digests = self._digests
+            return ""
+        names, digests = [""] * len(self._digests), self._digests
         if path.startswith(OPERATOR_PREFIX):
-            if not self._operator_digests:
-                return False
-            digests = self._operator_digests
+            if not self._operators:
+                return None
+            names = [n for n, _ in self._operators]
+            digests = [d for _, d in self._operators]
         elif not digests:
-            return True
+            return ""
         supplied = headers.get("x-api-key", "")
         auth = headers.get("authorization", "")
         if auth[:7].lower() == "bearer ":
@@ -98,7 +101,9 @@ class ApiGuard:
         candidate = _digest(supplied)
         # Percorre todas as chaves, sem curto-circuito: tempo independe de qual casou.
         matches = [hmac.compare_digest(candidate, known) for known in digests]
-        return any(matches) and bool(supplied)
+        if not supplied or not any(matches):
+            return None
+        return names[matches.index(True)]
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         """Ponto de entrada ASGI."""
@@ -137,7 +142,8 @@ class ApiGuard:
         self, scope: Scope, receive: Receive, send: Send, headers: Headers, rid: str
     ) -> None:
         path = scope["path"]
-        if path not in PUBLIC_PATHS and not self._authorized(headers, path):
+        who = "" if path in PUBLIC_PATHS else self._identify(headers, path)
+        if who is None:
             denied = error_response(
                 401,
                 "unauthorized",
@@ -147,6 +153,8 @@ class ApiGuard:
             )
             await denied(scope, receive, send)
             return
+        if who:
+            scope.setdefault("state", {})["operator"] = who
         limit = next(
             (v for p, v in self._body_limits.items() if path.startswith(p)), self._max_body
         )
