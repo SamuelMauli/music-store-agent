@@ -125,6 +125,8 @@ class LangChainLLM:
     def _method(self, tier: Tier) -> providers.StructuredMethod:
         if self._factory is not None:
             return "function_calling"
+        if self._settings.llm_structured_method != "auto":
+            return self._settings.llm_structured_method
         return providers.info_for(self._specs[tier].provider).structured_method
 
     def _convert(self, messages: list[Message], tier: Tier) -> list[BaseMessage]:

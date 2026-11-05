@@ -195,6 +195,18 @@ def test_structured_uses_the_method_of_each_provider(
     assert usage.calls == 1
 
 
+def test_structured_method_override_beats_the_provider_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # gpt-oss-20b no Groq às vezes responde em texto com tool forçada (HTTP 400 "did not
+    # call a tool"); EMPORIO_LLM_STRUCTURED_METHOD=json_schema resolve só por configuração.
+    chat = SpyChat(messages=iter([]), methods=[])
+    monkeypatch.setattr(providers, "build_chat", _spy_factory(chat))
+    settings = _settings(llm_structured_method="json_schema")
+    LangChainLLM(settings, model_override="groq:openai/gpt-oss-20b").structured(MSGS, Probe)
+    assert chat.methods == ["json_schema"]
+
+
 def test_structured_falls_back_to_forced_tool_calling(monkeypatch: pytest.MonkeyPatch) -> None:
     reply = AIMessage(
         "",

@@ -81,6 +81,8 @@ class Settings(BaseSettings):
         llm_aws_region: Região do Bedrock (senão, ``AWS_REGION``/perfil da AWS).
         llm_timeout_seconds: Limite por chamada ao provedor.
         llm_max_tokens: Teto de tokens de saída por chamada.
+        llm_structured_method: Método da saída estruturada; ``auto`` usa o padrão do provedor.
+            Ex.: ``json_schema`` para modelo que não chama tool forçada (gpt-oss-20b no Groq).
         llm_price_*: Preço em US$ por milhão de tokens, usado só para estimar custo do turno.
         llm_price_table: Preço por nome de modelo (``EMPORIO_LLM_PRICE_TABLE`` em JSON, ex.:
             ``{"openai/gpt-oss-20b": {"input": 0.075, "output": 0.3}}``); vence o preço do tier.
@@ -138,6 +140,7 @@ class Settings(BaseSettings):
     llm_aws_region: str | None = None
     llm_timeout_seconds: float = 20.0
     llm_max_tokens: int = 700
+    llm_structured_method: Literal["auto", "function_calling", "json_schema", "json_mode"] = "auto"
     llm_price_small_input: float = 0.075
     llm_price_small_output: float = 0.30
     llm_price_medium_input: float = 0.15
