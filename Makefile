@@ -1,4 +1,4 @@
-.PHONY: docker-build compose-up compose-down setup ingest chat api test lint typecheck check eval-retrieval eval eval-replay eval-live examples
+.PHONY: llm-check docker-build compose-up compose-down setup ingest chat api test lint typecheck check eval-retrieval eval eval-replay eval-live examples
 
 setup:
 	uv sync --frozen
@@ -55,3 +55,7 @@ compose-up:
 
 compose-down:
 	docker compose -f deploy/docker-compose.yml --env-file deploy/.env $(if $(PROFILE),--profile $(PROFILE)) down
+
+# diagnostico do LLM: credencial + chamada real (tool calling e saida estruturada) por papel
+llm-check:
+	uv run python -m emporio.agent.llm.doctor

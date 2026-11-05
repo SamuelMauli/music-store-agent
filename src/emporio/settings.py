@@ -13,6 +13,24 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 _STORE_TZ = "America/Campo_Grande"
 POLICY_PDF_NAME = "politicas_da_loja.pdf"
 
+LLMProviderName = Literal[
+    "openai",
+    "azure_openai",
+    "anthropic",
+    "google",
+    "bedrock",
+    "groq",
+    "ollama",
+    "openrouter",
+    "deepseek",
+    "mistral",
+    "together",
+    "xai",
+    "vllm",
+    "openai_compatible",
+    "fake",
+]
+
 
 class ModelPrice(BaseModel):
     """Preço de um modelo em US$ por milhão de tokens."""
@@ -47,12 +65,20 @@ class Settings(BaseSettings):
         verify_max_attempts_per_ip: Falhas de verificação por IP antes do bloqueio.
         verify_lockout_seconds: Duração do bloqueio por alvo/IP (TTL das falhas).
         use_system_clock: Usa o relógio real em vez de ``reference_datetime``.
-        llm_provider: ``openai_compatible`` (Groq, Ollama, OpenAI...) ou ``fake`` (offline).
-        llm_base_url: Endpoint OpenAI-compatível.
-        llm_api_key: Chave do provedor; nunca logada.
-        llm_model_small: Modelo do roteador, das guardas e do resumo.
-        llm_model_medium: Modelo do nó de resposta.
-        llm_model_fallback: Modelo alternativo quando o principal falha (opcional).
+        llm_provider: Provedor padrão das specs sem prefixo (``openai``, ``anthropic``,
+            ``google``, ``bedrock``, ``groq``, ``openai_compatible``..., ou ``fake`` offline).
+        llm_base_url: Endpoint do provedor padrão; vale sempre para ``openai_compatible`` e,
+            para os demais, só quando definido explicitamente.
+        llm_api_key: Chave do provedor padrão (vence a variável do SDK); nunca logada.
+        llm_api_keys: Chave por provedor (``EMPORIO_LLM_API_KEYS`` em JSON, ex.:
+            ``{"anthropic": "..."}``); alternativa às variáveis padrão de cada SDK.
+        llm_model_small: Spec ``provedor:modelo`` (ou só ``modelo``) do roteador, das guardas
+            e do resumo.
+        llm_model_medium: Spec do nó de resposta.
+        llm_model_fallback: Alias legado: uma spec reserva, anexada ao fim de ``llm_fallbacks``.
+        llm_fallbacks: Cadeia de specs reserva, em ordem (``EMPORIO_LLM_FALLBACKS`` em JSON).
+        llm_azure_api_version: ``api_version`` do Azure OpenAI (senão, a variável do SDK).
+        llm_aws_region: Região do Bedrock (senão, ``AWS_REGION``/perfil da AWS).
         llm_timeout_seconds: Limite por chamada ao provedor.
         llm_max_tokens: Teto de tokens de saída por chamada.
         llm_price_*: Preço em US$ por milhão de tokens, usado só para estimar custo do turno.
@@ -100,12 +126,16 @@ class Settings(BaseSettings):
     verify_max_attempts_per_target: int = 5
     verify_max_attempts_per_ip: int = 10
     verify_lockout_seconds: int = 900
-    llm_provider: Literal["openai_compatible", "fake"] = "openai_compatible"
+    llm_provider: LLMProviderName = "openai_compatible"
     llm_base_url: str = "https://api.groq.com/openai/v1"
     llm_api_key: SecretStr | None = None
+    llm_api_keys: dict[str, SecretStr] = {}
     llm_model_small: str = "openai/gpt-oss-20b"
     llm_model_medium: str = "openai/gpt-oss-120b"
     llm_model_fallback: str | None = None
+    llm_fallbacks: list[str] = []
+    llm_azure_api_version: str | None = None
+    llm_aws_region: str | None = None
     llm_timeout_seconds: float = 20.0
     llm_max_tokens: int = 700
     llm_price_small_input: float = 0.075

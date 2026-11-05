@@ -1,10 +1,11 @@
-"""Resiliência: retentativa com backoff, circuit breaker e modelo de fallback."""
+"""Resiliência: retentativa com backoff, circuit breaker por provedor e cadeia de fallback."""
 
 from __future__ import annotations
 
 import logging
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from typing import Any
 
 from pydantic import BaseModel
@@ -69,32 +70,59 @@ class CircuitBreaker:
             self._opened_at = self._now()
 
 
+@dataclass(slots=True)
+class _Link:
+    provider: LLMProvider
+    breaker: CircuitBreaker
+    name: str
+
+
+def _name(provider: LLMProvider, index: int) -> str:
+    return str(getattr(provider, "name", None) or f"{type(provider).__name__}[{index}]")
+
+
 class ResilientLLM:
-    """Decorator de :class:`LLMProvider` com retentativa, circuit breaker e fallback."""
+    """Decorator de :class:`LLMProvider` sobre uma cadeia de provedores.
+
+    Percorre a cadeia em ordem; cada elo tem circuit breaker próprio. Falha transitória
+    é retentada com backoff no mesmo elo e, esgotada, passa ao próximo; falha permanente
+    passa direto ao próximo. Elo com circuito aberto é pulado.
+    """
 
     def __init__(
         self,
         primary: LLMProvider,
         fallback: LLMProvider | None = None,
         *,
+        fallbacks: Sequence[LLMProvider] = (),
         attempts: int = 5,
         breaker: CircuitBreaker | None = None,
+        breaker_factory: Callable[[], CircuitBreaker] = CircuitBreaker,
         wait: wait_base | None = None,
     ) -> None:
         """Cria o decorator.
 
         Args:
             primary: Provedor principal.
-            fallback: Provedor alternativo usado quando o principal falha ou o circuito abre.
+            fallback: Primeiro provedor reserva (forma legada de ``fallbacks``).
+            fallbacks: Demais reservas, em ordem.
             attempts: Tentativas por chamada no mesmo provedor (só falhas transitórias).
-            breaker: Disjuntor; um novo por padrão.
+            breaker: Disjuntor do principal; um novo por padrão.
+            breaker_factory: Cria o disjuntor de cada reserva.
             wait: Estratégia de espera do tenacity (``wait_none`` nos testes).
         """
-        self._primary = primary
-        self._fallback = fallback
+        chain = [primary, *([fallback] if fallback is not None else []), *fallbacks]
+        self._links = [
+            _Link(p, breaker if i == 0 and breaker else breaker_factory(), _name(p, i))
+            for i, p in enumerate(chain)
+        ]
         self._attempts = attempts
-        self._breaker = breaker or CircuitBreaker()
         self._wait = wait or wait_exponential(multiplier=2.0, max=15.0)
+
+    @property
+    def chain(self) -> list[str]:
+        """Nomes dos elos, em ordem (diagnóstico)."""
+        return [link.name for link in self._links]
 
     def complete(
         self,
@@ -123,20 +151,22 @@ class ResilientLLM:
         )
 
     def _guarded[R](self, call: Callable[[LLMProvider], R]) -> R:
-        if not self._breaker.is_open:
+        for position, link in enumerate(self._links):
+            if link.breaker.is_open:
+                logger.info("circuito aberto, pulando %s", link.name)
+                continue
             try:
-                result = self._retrying(call, self._primary)
+                result = self._retrying(call, link.provider)
             except LLMError as exc:
-                self._breaker.record_failure()
-                logger.warning("provedor principal falhou: %s", type(exc).__name__)
+                link.breaker.record_failure()
+                logger.warning(
+                    "provedor %s (elo %d) falhou: %s", link.name, position, type(exc).__name__
+                )
             else:
-                self._breaker.record_success()
+                link.breaker.record_success()
+                if position:
+                    logger.info("atendido pelo fallback %s", link.name)
                 return result
-        if self._fallback is not None:
-            try:
-                return self._retrying(call, self._fallback)
-            except LLMError as exc:
-                logger.warning("fallback falhou: %s", type(exc).__name__)
         raise LLMUnavailableError("LLM indisponível")
 
     def _retrying[R](self, call: Callable[[LLMProvider], R], provider: LLMProvider) -> R:
