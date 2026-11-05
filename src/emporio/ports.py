@@ -12,6 +12,7 @@ from emporio.domain.entities import CatalogEntry, Customer, Order, Promotion
 from emporio.domain.lookup import NameLookup
 from emporio.domain.policy import PolicySnippet
 from emporio.domain.specifications import Specification
+from emporio.domain.ticket import Ticket, TicketKind
 from emporio.domain.value_objects import Email, OrderId
 
 
@@ -100,4 +101,19 @@ class VectorIndex(Protocol):
 
     def search(self, vector: NDArray[np.float32], k: int) -> list[tuple[str, float]]:
         """Os ``k`` ids mais próximos com a similaridade, do maior ao menor."""
+        ...
+
+
+class TicketRepository(Protocol):
+    """Chamados de suporte, somente anexação (CQRS leve: a única escrita do agente)."""
+
+    def open(
+        self,
+        session_id: str,
+        kind: TicketKind,
+        summary: str,
+        order_id: int | None,
+        now: datetime,
+    ) -> Ticket:
+        """Abre o chamado; repetir sessão + tipo + resumo devolve o mesmo protocolo."""
         ...
