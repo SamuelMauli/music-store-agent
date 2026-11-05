@@ -1,0 +1,38 @@
+# VCS e CI
+.git
+.github
+.gitignore
+.pre-commit-config.yaml
+
+# ambiente e caches locais
+.venv
+__pycache__
+*.py[cod]
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.hypothesis
+.coverage
+coverage.xml
+htmlcov
+dist
+*.egg-info
+
+# segredos e estado de execução: nunca entram na imagem
+.env
+.env.*
+!.env.example
+*.duckdb
+*.duckdb.wal
+data/*.sqlite
+data/*.sqlite-*
+data/quality_report.json
+data/traces.jsonl
+
+# não são necessários em runtime
+tests
+evals
+examples
+Makefile
+Dockerfile
+.dockerignore
