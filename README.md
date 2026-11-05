@@ -9,7 +9,7 @@ LangGraph agent that answers customers of a fictional instrument store in Campo 
 ![ruff](https://img.shields.io/badge/lint-ruff-261230)
 [![License MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-**At a glance:** 9-node graph with deterministic guards on input and output · 14 typed tools over DuckDB (medallion layers, ODCS contracts) · manual rules as pure functions on decimal `Money`, business days on a holiday calendar · 14 LLM vendors + generic OpenAI-compatible behind one port with a fallback chain · layered prompt-injection guard (patterns + trained classifier) · CLI, SSE API and an optional WhatsApp channel with human handoff · 1008 tests, 95.44% coverage, offline eval 54/54, live eval 38/40 on Gemini.
+**At a glance:** 9-node graph with deterministic guards on input and output · 14 typed tools over DuckDB (medallion layers, ODCS contracts) · manual rules as pure functions on decimal `Money`, business days on a holiday calendar · 14 LLM vendors + generic OpenAI-compatible behind one port with a fallback chain · layered prompt-injection guard (patterns + trained classifier) · CLI, SSE API and an optional WhatsApp channel with human handoff · 1009 tests, 95.44% coverage, offline eval 54/54, live eval 38/40 on Gemini.
 
 ## Contents
 
@@ -201,7 +201,7 @@ EMPORIO_LLM_API_KEYS={"google":"<google-key>"}
 
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Tests | 1008 passed, 14 skipped (they need real Postgres + Redis) | `make check` |
+| Tests | 1009 passed, 13 skipped (they need real Postgres + Redis) | `make check` |
 | Integration against real Postgres 17 + Redis | 13 integration + 65 port-contract tests passing | `uv run pytest -m integration`, `uv run pytest tests/contracts` |
 | Coverage | 95.44% (floor 80%) | `make check` |
 | Typing / lint | `mypy --strict` clean (140 files) / ruff clean | `make typecheck`, `make lint` |
