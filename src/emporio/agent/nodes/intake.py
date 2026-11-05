@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Final
+import logging
+from typing import Any
 
 from langchain_core.runnables import RunnableConfig
 
@@ -12,20 +13,25 @@ from emporio.agent.llm.types import LLMError
 from emporio.agent.nodes.deps import Deps, add_usage, failure, inbound_text, route_of
 from emporio.agent.scope import scope_gate
 from emporio.agent.state import TURN_RESET, ChatState
+from emporio.guardrails.input import REFUSAL, looks_like_injection, normalize
 
-MAX_INPUT_CHARS: Final = 2000
+log = logging.getLogger("emporio.guard")
 
 
 def input_guard(state: ChatState, config: RunnableConfig) -> dict[str, Any]:
-    """Sanitiza a mensagem, tira a PII e zera o que é do turno."""
-    text = " ".join(inbound_text(config).split())[:MAX_INPUT_CHARS]
+    """Normaliza a mensagem, tira a PII, barra injeção óbvia e zera o que é do turno."""
+    text = normalize(inbound_text(config))
     safe = redact(text)
-    return {
+    updates: dict[str, Any] = {
         **TURN_RESET,
         "user_text": safe,
         "messages": [{"role": "user", "content": safe}],
         "turn": state.get("turn", 0) + 1,
     }
+    if looks_like_injection(text):
+        log.warning("injecao detectada na sessao %s: %s", state.get("session_id"), safe[:80])
+        updates.update(answer=REFUSAL, blocked=True)
+    return updates
 
 
 def _from_pending(

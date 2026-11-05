@@ -42,7 +42,7 @@ def history(state: ChatState) -> list[Message]:
     return list(state.get("messages", []))[-HISTORY_WINDOW:]
 
 
-def _policy_context(deps: Deps, state: ChatState, route: RouteDecision) -> list[dict[str, Any]]:
+def policy_context(deps: Deps, state: ChatState, route: RouteDecision) -> list[dict[str, Any]]:
     if not any(i in POLICY_INTENTS for i in route.intents):
         return []
     snippets = deps.retriever.retrieve(state["user_text"], 3)
@@ -158,7 +158,7 @@ class ReactAgent:
         """Executa o turno do agente."""
         deps = self._deps
         route = route_of(state)
-        policies = _policy_context(deps, state, route)
+        policies = policy_context(deps, state, route)
         loop = _Loop(
             [
                 {"role": "system", "content": system_prompt(deps, state, route, policies)},
