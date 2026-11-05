@@ -76,7 +76,9 @@ def build_matrix(report_dir: Path, expected: dict[str, str]) -> dict[str, Any]:
         "not_run": {f: why for f, why in sorted(expected.items()) if f not in families},
         "note": (
             "valores copiados dos relatórios ao vivo; prompt_hash = versão do código/prompt "
-            "gravada no relatório; US$/caso aprovado = cost_total / casos aprovados"
+            "gravada no relatório; US$/caso aprovado = cost_total / casos aprovados; "
+            "famílias com prompt_hash diferente rodaram versões diferentes do código, "
+            "a comparação entre elas é aproximada"
         ),
     }
 

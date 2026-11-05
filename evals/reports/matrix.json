@@ -109,5 +109,5 @@
   "not_run": {
     "openai": "not run (no API key)"
   },
-  "note": "valores copiados dos relatórios ao vivo; prompt_hash = versão do código/prompt gravada no relatório; US$/caso aprovado = cost_total / casos aprovados"
+  "note": "valores copiados dos relatórios ao vivo; prompt_hash = versão do código/prompt gravada no relatório; US$/caso aprovado = cost_total / casos aprovados; famílias com prompt_hash diferente rodaram versões diferentes do código, a comparação entre elas é aproximada"
 }

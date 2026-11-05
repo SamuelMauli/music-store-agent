@@ -252,6 +252,10 @@ def render(report: dict[str, Any]) -> str:
         lines.append("AVISO: juiz heurístico (não é LLM); números só exercitam o pipeline.")
     if report["warning"]:
         lines.append(f"AVISO: {report['warning']}")
+    lines.append(
+        "AVISO: limiar escolhido in-sample (maior kappa nos mesmos rótulos); "
+        "sem holdout, é otimista."
+    )
     lines.append(f"{'critério':<13}{'limiar':>7}{'acc':>8}{'kappa':>8}   tp  fp  fn  tn")
     for name, data in report["criteria"].items():
         c = data["chosen"]
