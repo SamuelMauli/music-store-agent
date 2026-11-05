@@ -85,7 +85,7 @@ def test_permanent_error_is_not_retried_and_uses_fallback() -> None:
 
 
 def test_unavailable_when_everything_fails() -> None:
-    primary = Scripted(LLMTransientError("a"), LLMTransientError("b"))
+    primary = Scripted(*[LLMTransientError("a")] * 4)
     llm = ResilientLLM(primary, wait=wait_none())
     with pytest.raises(LLMUnavailableError):
         llm.complete(MSGS)

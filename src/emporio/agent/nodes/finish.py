@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any, Final
 
 from emporio.agent.nodes.deps import Deps, tool_context, trace_of
@@ -21,6 +22,7 @@ HANDOFF_NO_TICKET: Final = (
     "Vou passar seu atendimento para a equipe da loja. Se preferir, fale agora no {phone}."
 )
 _TRANSPARENCY: Final = "assistente virtual"
+_OPENING: Final = re.compile(r"^\s*(?:oi|olá|ola)[!,.]*\s*", re.IGNORECASE)
 
 
 def make_handoff(deps: Deps) -> Any:
@@ -53,5 +55,5 @@ def respond(state: ChatState) -> dict[str, Any]:
     notes = [n for n in state.get("scope_notes", []) if n not in answer]
     text = "\n\n".join([*notes, answer]) if notes else answer
     if state.get("turn", 1) == 1 and _TRANSPARENCY not in text:
-        text = GREETING + text
+        text = GREETING + _OPENING.sub("", text, count=1)
     return {"answer": text, "messages": [{"role": "assistant", "content": text}]}

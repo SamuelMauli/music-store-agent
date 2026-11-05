@@ -75,6 +75,11 @@ def ungrounded_numbers(answer: str, grounded: frozenset[Decimal]) -> list[str]:
     return list(dict.fromkeys(bad))
 
 
+def _plain(text: str) -> str:
+    """Tira marcação markdown (negrito e crases): a saída é texto puro."""
+    return re.sub(r"\*\*|`", "", text)
+
+
 def limit_emoji(text: str, maximum: int) -> str:
     """Remove emojis além de ``maximum`` (0 em reclamações)."""
     kept = 0
@@ -137,7 +142,7 @@ def check_answer(
     Returns:
         Veredito com o texto já com o limite de emoji aplicado.
     """
-    text = limit_emoji(answer, 0 if complaint else 1)
+    text = limit_emoji(_plain(answer), 0 if complaint else 1)
     violations: list[str] = []
     details: list[str] = []
     if bad := ungrounded_numbers(text, grounded):
