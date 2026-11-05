@@ -34,6 +34,7 @@ def test_transcript_has_header_turns_and_metrics_footer(ingested: Settings) -> N
     assert text.count("Cliente: ") == 3
     assert text.count("Tom: ") == 3
     assert "dia 4 de 7" in text
+    assert "aparecem mascarados na transcrição" in text
     assert "l***@jmail.com" in text
     assert "leticia.rocha@jmail.com" not in text
     for footer in (
@@ -53,3 +54,10 @@ def test_main_requires_a_real_provider(
     monkeypatch.chdir(tmp_path)
     with pytest.raises(SystemExit, match="provedor real"):
         examples.main([])
+
+
+def test_greeting_is_not_glued_to_first_list_item() -> None:
+    assert examples.break_list("Oi! Posso ajudar. - A – R$ 1\n- B – R$ 2") == (
+        "Oi! Posso ajudar.\n- A – R$ 1\n- B – R$ 2"
+    )
+    assert examples.break_list("Sem lista aqui - só um hífen") == "Sem lista aqui - só um hífen"

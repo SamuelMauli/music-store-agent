@@ -2,9 +2,11 @@ Catálogo: violões por faixa de preço e preço no PIX
 Data de referência: 25/03/2026 10:00 (America/Campo_Grande)
 Modelo: openai/gpt-oss-20b (resposta), openai/gpt-oss-20b (roteador)
 Provider: api.groq.com
+Nota: e-mails/telefones do cliente aparecem mascarados na transcrição; o agente recebeu o valor real.
 ------------------------------------------------------------------------
 Cliente: Quais violões vocês têm até R$ 1.000?
-Tom: Oi! Eu sou o Tom, assistente virtual da Empório da Música, e você pode pedir um atendente humano quando quiser. - Tagima Memphis AC‑39 Nylon Natural – R$ 429,90 
+Tom: Oi! Eu sou o Tom, assistente virtual da Empório da Música, e você pode pedir um atendente humano quando quiser.
+- Tagima Memphis AC‑39 Nylon Natural – R$ 429,90 
 - Rozini RC‑104 Nylon Estudante – R$ 459,90 
 - Shelby SN‑100 Folk Aço Preto – R$ 549,00 
 - Giannini GF‑1R Aço Folk Sunburst – R$ 579,90 

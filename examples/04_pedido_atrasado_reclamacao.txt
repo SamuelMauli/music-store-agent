@@ -2,6 +2,7 @@ Pedido atrasado e reclamação: chamado legítimo
 Data de referência: 25/03/2026 10:00 (America/Campo_Grande)
 Modelo: openai/gpt-oss-20b (resposta), openai/gpt-oss-20b (roteador)
 Provider: api.groq.com
+Nota: e-mails/telefones do cliente aparecem mascarados na transcrição; o agente recebeu o valor real.
 ------------------------------------------------------------------------
 Cliente: Onde está meu pedido 8?
 Tom: Oi! Eu sou o Tom, assistente virtual da Empório da Música, e você pode pedir um atendente humano quando quiser. Obrigado! Agora preciso do e-mail ou do telefone cadastrado na compra, para confirmar que o pedido é seu.

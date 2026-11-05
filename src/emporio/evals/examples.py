@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import sys
 import time
 import uuid
@@ -17,6 +18,16 @@ from emporio.settings import Settings
 
 EXAMPLES_DIR = Path("examples")
 RULE = "-" * 72
+MASK_NOTE = (
+    "Nota: e-mails/telefones do cliente aparecem mascarados na transcrição; "
+    "o agente recebeu o valor real."
+)
+_GLUED_ITEM = re.compile(r"(?<=[.!?:]) - (?=\S)")
+
+
+def break_list(answer: str) -> str:
+    """Quebra a linha entre a saudação/frase e o primeiro item de lista colado nela."""
+    return _GLUED_ITEM.sub("\n- ", answer, count=1)
 
 
 @dataclass(frozen=True, slots=True)
@@ -101,10 +112,11 @@ def render(example: Example, settings: Settings, rows: list[Row]) -> str:
         f"Data de referência: {when:%d/%m/%Y %H:%M} ({when.tzinfo})",
         f"Modelo: {settings.llm_model_medium} (resposta), {settings.llm_model_small} (roteador)",
         f"Provider: {provider}",
+        MASK_NOTE,
         RULE,
     ]
     for row in rows:
-        lines += [f"Cliente: {row.user}", f"Tom: {row.answer}", ""]
+        lines += [f"Cliente: {row.user}", f"Tom: {break_list(row.answer)}", ""]
     lines += [
         RULE,
         "Tools chamadas por turno: " + " | ".join(", ".join(r.tools) or "-" for r in rows),
