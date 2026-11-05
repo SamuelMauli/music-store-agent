@@ -22,6 +22,8 @@ class Settings(BaseSettings):
         contracts_dir: Diretório com os data contracts ODCS.
         quality_report_path: Destino do relatório de qualidade gerado.
         timezone: Fuso IANA da loja.
+        metro_cities: Cidades da região metropolitana de Campo Grande (§5.1); sem lista
+            oficial no manual, o default é só a capital (``EMPORIO_METRO_CITIES`` em JSON).
         reference_datetime: "Agora" simulado; os dados vão de out/2025 a mar/2026.
     """
 
@@ -32,6 +34,7 @@ class Settings(BaseSettings):
     contracts_dir: Path = Path("data/contracts")
     quality_report_path: Path = Path("data/quality_report.json")
     timezone: str = _STORE_TZ
+    metro_cities: list[str] = ["Campo Grande"]
     reference_datetime: datetime = datetime(2026, 3, 25, 10, 0, tzinfo=ZoneInfo(_STORE_TZ))
 
     @model_validator(mode="after")
