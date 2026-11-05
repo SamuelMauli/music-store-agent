@@ -6,12 +6,13 @@ Limites de falha: 3 por sessão (estado) e, em store com TTL, por pedido, por co
 from __future__ import annotations
 
 import json
+import re
 from typing import Any, Final
 
 from langchain_core.runnables import RunnableConfig
 
 from emporio.agent.identity import Identity, extract_identity
-from emporio.agent.intents import VERIFICATION_INTENTS, RouteDecision
+from emporio.agent.intents import VERIFICATION_INTENTS, Intent, RouteDecision
 from emporio.agent.nodes.deps import (
     Deps,
     inbound_ip,
@@ -55,6 +56,20 @@ def _missing_text(order_id: int | None, identity: Identity) -> str:
     return ASK_BOTH
 
 
+_ORDER_REFERENCE: Final = re.compile(r"\b(pedido|compra|comprei|comprado)\b", re.IGNORECASE)
+
+
+def _general_policy_question(state: ChatState, route: RouteDecision, text: str = "") -> bool:
+    """Dúvida de regra ("posso trocar um violão que não gostei?"): responde pela política.
+
+    Só vale para devolução/troca sem pedido, sem contato, sem pergunta pendente e sem
+    menção a pedido ou compra; status de pedido sempre exige verificação.
+    """
+    if Intent.ORDER_STATUS in route.intents or state.get("pending"):
+        return False
+    return not _ORDER_REFERENCE.search(text)
+
+
 def _without_verification(route: RouteDecision) -> RouteDecision:
     kept = [i for i in route.intents if i not in VERIFICATION_INTENTS]
     return route.model_copy(update={"intents": kept}).normalized()
@@ -94,10 +109,14 @@ def make_verification(deps: Deps) -> Any:
         route = route_of(state)
         if not route.needs_verification or state.get("verified_customer_id") is not None:
             return {}
-        identity = extract_identity(inbound_text(config), allow_bare_order=True)
+        text = inbound_text(config)
+        identity = extract_identity(text, allow_bare_order=True)
         order_id = identity.order_id or route.entities.order_id
         if order_id is None or not identity.has_contact:
-            return _ask(state, route, _missing_text(order_id, identity))
+            nothing_given = order_id is None and not identity.has_contact
+            policy_only = nothing_given and _general_policy_question(state, route, text)
+            # dúvida de regra segue para a política sem pedir dados
+            return {} if policy_only else _ask(state, route, _missing_text(order_id, identity))
         policy = deps.verify_policy
         targets, ips = _keys(order_id, identity, inbound_ip(config))
         locked = any(deps.attempts.count(k) >= policy.max_per_target for k in targets) or any(

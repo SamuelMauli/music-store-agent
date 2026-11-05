@@ -79,3 +79,21 @@ def test_verification_expires_after_ttl(ingested: Settings) -> None:
         assert built.service.snapshot("t1")["verified_customer_id"] is None
     finally:
         built.close()
+
+
+@pytest.mark.parametrize(
+    "question", ["Posso trocar um violão que não gostei?", "Qual o prazo para trocar por defeito?"]
+)
+def test_general_return_question_answers_policy_without_asking_order(
+    container: Container, question: str
+) -> None:
+    """Dúvida de regra de troca não pede pedido nem contato; responde pela política."""
+    reply = container.service.chat("p1", question)
+    assert "e-mail ou telefone" not in reply.answer  # o nó de verificação não interveio
+    assert "verify_customer" not in reply.tools
+
+
+def test_return_mentioning_order_still_asks_verification(container: Container) -> None:
+    reply = container.service.chat("p2", "Quero devolver meu pedido")
+    assert "e-mail ou telefone" in reply.answer
+    assert "check_return_eligibility" not in reply.tools

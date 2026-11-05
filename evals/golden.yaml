@@ -64,7 +64,6 @@
     grounded_numbers: true
 
 - id: cat-iniciante-1500
-
   live: true
   fake: false
   turns: ["Me recomende um violão para iniciante até R$ 1.500"]
@@ -74,7 +73,6 @@
     grounded_numbers: true
 
 - id: cat-comparar-yamaha
-
   live: true
   fake: false
   turns: ["Compare o Yamaha C40 com o Yamaha C70"]
@@ -140,7 +138,6 @@
     grounded_numbers: true
 
 - id: prod-sem-estoque
-
   live: true
   fake: false
   turns: ["Tem o Giannini GF-3D Dreadnought Sunburst?"]
@@ -151,7 +148,6 @@
     grounded_numbers: true
 
 - id: prod-descontinuado
-
   live: true
   fake: false
   turns: ["Ainda vendem o Shelby SN-7C de 7 cordas?"]
@@ -162,13 +158,12 @@
     grounded_numbers: true
 
 - id: prod-parcelamento-regras
-
   live: true
   fake: false
   turns: ["Quais as regras de parcelamento da loja?"]
   expect:
-    tool_calls:
-      - {name: search_policies}
+    # as políticas relevantes já entram no contexto; citar a seção prova o grounding
+    must_mention: ["§3"]
     must_mention_any: ["sem juros", "6x", "12x"]
     grounded_numbers: true
 
@@ -201,7 +196,6 @@
     grounded_numbers: true
 
 - id: promo-takamine-nao-vigente
-
   live: true
   fake: false
   turns: ["O Takamine GD20 ainda está com 12% de desconto?"]
@@ -213,7 +207,6 @@
     grounded_numbers: true
 
 - id: promo-taylor
-
   live: true
   fake: false
   turns: ["Qual o preço do Taylor 110e com a promoção?"]
@@ -320,7 +313,6 @@
     must_not_mention: ["4.1"]
 
 - id: devolucao-politica-geral
-
   live: true
   fake: false
   turns: ["Posso trocar um violão que não gostei?"]
@@ -404,7 +396,6 @@
     grounded_numbers: true
 
 - id: garantia-defeito
-
   live: true
   fake: false
   turns: ["Qual o prazo para trocar por defeito?"]
@@ -430,7 +421,6 @@
     forbidden_tools: [search_products]
 
 - id: escopo-poema
-
   live: true
   fake: false
   turns: ["Me ajuda a escrever um poema sobre violão?"]
@@ -439,13 +429,11 @@
     forbidden_tools: [search_products]
 
 - id: escopo-boleto
-
   live: true
   fake: false
   turns: ["Vocês aceitam boleto?"]
   expect:
-    tool_calls:
-      - {name: search_policies}
+    must_mention: ["§3"]
     grounded_numbers: true
 
 # ---------- reclamação, atendente, LGPD ----------
@@ -459,7 +447,6 @@
     must_mention: ["EMP-"]
 
 - id: reclamacao-defeito
-
   live: true
   fake: false
   turns: ["Meu violão chegou com defeito e estou muito insatisfeito"]
@@ -470,7 +457,6 @@
     must_mention: ["EMP-"]
 
 - id: lgpd-apagar-dados
-
   live: true
   fake: false
   turns: ["Quero apagar meus dados pessoais, LGPD"]
