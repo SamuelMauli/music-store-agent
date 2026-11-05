@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: emporio-config
+data:
+  EMPORIO_ENV: prod
+  EMPORIO_STATE_BACKEND: postgres
+  EMPORIO_LOG_FORMAT: json
+  EMPORIO_LOG_LEVEL: INFO
+  EMPORIO_METRICS_ENABLED: "true"
+  EMPORIO_MAX_MESSAGE_CHARS: "2000"
+  EMPORIO_TRUSTED_PROXY_HOPS: "1"          # 1 = atrás do ingress; ajuste à sua topologia
+  EMPORIO_LLM_PROVIDER: openai_compatible
+  EMPORIO_LLM_BASE_URL: https://api.groq.com/openai/v1
+  EMPORIO_OTEL_EXPORTER: otlp
+  EMPORIO_OTEL_ENDPOINT: http://otel-collector:4318/v1/traces
+  EMPORIO_CORS_ORIGINS: "[]"

@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: emporio
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - deployment.yaml
+  - service.yaml
+  - hpa.yaml
+  - pdb.yaml
+  - networkpolicy.yaml
+# O Secret `emporio-secrets` NÃO entra aqui: crie-o fora do git (secret.example.yaml,
+# External Secrets, Sealed Secrets...). Overlays trocam a imagem por tag fixa/digest:
+images:
+  - name: ghcr.io/samuelmauli/music-store-agent
+    newTag: latest   # em produção use a tag vX.Y.Z (ou @sha256) publicada pelo release.yml

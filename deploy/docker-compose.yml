@@ -1,0 +1,99 @@
+# Stack completa: api + postgres + redis + otel-collector (+ jaeger no profile `observability`).
+#   cp deploy/.env.example deploy/.env   # preencha os segredos
+#   make compose-up
+# Atenção: o volume `emporio-data` é semeado com o banco da imagem só na 1ª criação; ao subir
+# uma imagem com dados novos, recrie-o (`docker compose down -v`; apaga SQLite local, não o Postgres).
+name: emporio
+
+x-restart: &restart
+  restart: unless-stopped
+
+services:
+  api:
+    <<: *restart
+    build:
+      context: ..
+      args:
+        EXTRAS: ${EXTRAS:-all}
+    image: ${EMPORIO_IMAGE:-emporio-api:local}
+    env_file: [.env]
+    environment:
+      EMPORIO_ENV: ${EMPORIO_ENV:-prod}
+      EMPORIO_STATE_BACKEND: postgres
+      EMPORIO_DATABASE_URL: postgresql://emporio:${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD em deploy/.env}@postgres:5432/emporio
+      EMPORIO_REDIS_URL: redis://redis:6379/0
+      EMPORIO_LOG_FORMAT: json
+      EMPORIO_OTEL_EXPORTER: ${EMPORIO_OTEL_EXPORTER:-otlp}
+      EMPORIO_OTEL_ENDPOINT: ${EMPORIO_OTEL_ENDPOINT:-http://otel-collector:4318/v1/traces}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      - emporio-data:/app/data
+    tmpfs:
+      - /tmp
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    stop_grace_period: 30s
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      otel-collector: {condition: service_started}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/readyz', timeout=2)"]
+      interval: 15s
+      timeout: 3s
+      start_period: 15s
+      retries: 3
+
+  postgres:
+    <<: *restart
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: emporio
+      POSTGRES_DB: emporio
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD em deploy/.env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U emporio -d emporio"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    <<: *restart
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # Imagem distroless (sem shell): sem healthcheck de container; a extensão health_check
+  # responde em :13133 para sondas externas.
+  otel-collector:
+    <<: *restart
+    image: otel/opentelemetry-collector:0.116.1
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./otel-collector.yaml:/etc/otelcol/config.yaml:ro
+
+  # Com este profile, aponte EMPORIO_OTEL_ENDPOINT=http://jaeger:4318/v1/traces em deploy/.env
+  # (UI em http://localhost:16686).
+  jaeger:
+    <<: *restart
+    profiles: [observability]
+    image: jaegertracing/all-in-one:1.62.0
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"
+
+volumes:
+  emporio-data:
+  postgres-data:
+  redis-data:
