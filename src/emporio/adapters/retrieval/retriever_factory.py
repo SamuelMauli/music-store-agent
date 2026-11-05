@@ -5,7 +5,7 @@ from __future__ import annotations
 import duckdb
 
 from emporio.adapters.persistence import DuckDbPolicySectionRepository
-from emporio.adapters.retrieval.embedders import FastEmbedEmbedder
+from emporio.adapters.retrieval.embedders import shared_embedder
 from emporio.adapters.retrieval.hybrid import HybridRetriever
 from emporio.adapters.retrieval.long_context import LongContextRetriever
 from emporio.adapters.retrieval.vector_index import InMemoryVectorIndex
@@ -37,4 +37,4 @@ def build(
             con.close()
     if settings.policy_retriever == "long_context":
         return LongContextRetriever(sections)
-    return HybridRetriever(sections, embedder or FastEmbedEmbedder(), InMemoryVectorIndex())
+    return HybridRetriever(sections, embedder or shared_embedder(), InMemoryVectorIndex())

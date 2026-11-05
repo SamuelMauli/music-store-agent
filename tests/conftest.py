@@ -30,6 +30,8 @@ def real_settings(tmp_path_factory: pytest.TempPathFactory) -> Settings:
         contracts_dir=ROOT / "data" / "contracts",
         quality_report_path=workdir / "quality_report.json",
         reference_datetime=REFERENCE,
+        # classificador real (fastembed) só nos testes que o pedem; aqui, heurística pura
+        injection_classifier=False,
     )
 
 

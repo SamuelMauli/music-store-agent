@@ -110,6 +110,8 @@ class Settings(BaseSettings):
         metrics_enabled: Expõe ``GET /metrics`` no formato Prometheus.
         cors_origins: Origens liberadas para CORS (vazio = CORS desligado).
         max_message_chars: Tamanho máximo de uma mensagem do cliente.
+        injection_classifier: Liga o classificador treinado de injeção sobre a heurística
+            (``guardrails/injection.py``); falhando o modelo, a heurística segue sozinha.
         whatsapp_verify_token: Token que a Meta devolve no ``GET`` de verificação do webhook.
         whatsapp_app_secret: App secret; assina (HMAC-SHA256) o corpo de cada ``POST``.
         whatsapp_access_token: Token da Graph API para enviar mensagens.
@@ -137,6 +139,7 @@ class Settings(BaseSettings):
     metro_cities: list[str] = ["Campo Grande"]
     carnival_is_holiday: bool = False
     policy_retriever: Literal["long_context", "hybrid"] = "long_context"
+    injection_classifier: bool = True
     reference_datetime: datetime = datetime(2026, 3, 25, 10, 0, tzinfo=ZoneInfo(_STORE_TZ))
     checkpoint_path: Path = Path("data/checkpoints.sqlite")
     tickets_path: Path = Path("data/tickets.sqlite")

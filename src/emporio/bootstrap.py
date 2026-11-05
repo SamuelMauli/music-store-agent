@@ -23,6 +23,7 @@ from emporio.adapters.persistence import (
 )
 from emporio.adapters.persistence.sqlite_tickets import SqliteTicketRepository
 from emporio.adapters.retrieval import retriever_factory
+from emporio.adapters.retrieval.embedders import shared_embedder
 from emporio.adapters.whatsapp import GraphApiSender
 from emporio.agent.graph import build_graph
 from emporio.agent.llm import factory
@@ -34,6 +35,7 @@ from emporio.channels.whatsapp import WhatsAppChannel
 from emporio.clock import FixedClock, SystemClock
 from emporio.domain.calendar import HolidayCalendar
 from emporio.guardrails.attempts import AttemptStore, InMemoryAttemptStore, RedisAttemptStore
+from emporio.guardrails.injection import LayeredInjectionGuard, build_injection_guard
 from emporio.guardrails.rate_limit import RedisSlidingWindowLimiter, SlidingWindowLimiter
 from emporio.observability import Telemetry, build_telemetry
 from emporio.observability.tracing_llm import TracingLLM
@@ -170,6 +172,7 @@ def build_container(
     tickets: TicketRepository | None = None,
     telemetry: Telemetry | None = None,
     wall: Callable[[], float] | None = None,
+    injection_guard: LayeredInjectionGuard | None = None,
 ) -> Container:
     """Monta o serviço de conversa.
 
@@ -181,6 +184,7 @@ def build_container(
         tickets: Repositório de chamados; default segue ``state_backend``.
         wall: Relógio de parede (epoch) da validade da verificação; default ``time.time``.
         telemetry: Tracing; default vem de ``settings.otel_exporter`` (``none`` = no-op).
+        injection_guard: Guarda de injeção; default segue ``settings.injection_classifier``.
 
     Returns:
         Container com o ``ChatService`` pronto.
@@ -222,6 +226,12 @@ def build_container(
         use_clock,
         attempts=state.attempts,
         wall=wall or time.time,
+        injection_guard=injection_guard
+        or (
+            build_injection_guard(shared_embedder)
+            if settings.injection_classifier
+            else LayeredInjectionGuard()
+        ),
         verify_policy=VerifyPolicy(
             ttl_seconds=settings.verification_ttl_seconds,
             max_per_target=settings.verify_max_attempts_per_target,

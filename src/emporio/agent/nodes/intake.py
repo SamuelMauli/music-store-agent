@@ -13,7 +13,7 @@ from emporio.agent.llm.types import LLMError
 from emporio.agent.nodes.deps import Deps, add_usage, failure, inbound_text, route_of
 from emporio.agent.scope import scope_gate
 from emporio.agent.state import TURN_RESET, ChatState
-from emporio.guardrails.input import REFUSAL, looks_like_injection, normalize
+from emporio.guardrails.input import REFUSAL, normalize
 
 log = logging.getLogger("emporio.guard")
 
@@ -35,9 +35,19 @@ def make_input_guard(deps: Deps) -> Any:
             age = deps.wall() - state.get("verified_at", 0.0)
             if age >= deps.verify_policy.ttl_seconds:  # sem verified_at (legado) = expirada
                 updates.update(verified_customer_id=None, verified_first_name="", verified_at=0.0)
-        if looks_like_injection(text):
-            log.warning("injecao detectada na sessao %s: %s", state.get("session_id"), safe[:80])
+        verdict = deps.injection_guard.check(text)
+        if verdict.blocked:
+            log.warning(
+                "injecao detectada na sessao %s (camada=%s, score=%s, %.1f ms): %s",
+                state.get("session_id"),
+                verdict.reason,
+                "-" if verdict.score is None else f"{verdict.score:.3f}",
+                verdict.elapsed_ms,
+                safe[:80],
+            )
             updates.update(answer=REFUSAL, blocked=True)
+        elif verdict.degraded:
+            log.warning("guarda de injecao degradada: so heuristica nesta mensagem")
         return updates
 
     return input_guard
