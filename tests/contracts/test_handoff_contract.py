@@ -90,15 +90,44 @@ def test_extend_only_for_the_owner(store: Any) -> None:
 
 
 def test_release_removes_everything_and_reports_what_existed(store: Any) -> None:
-    assert store.release("c1") is None
+    assert store.release("c1", "ana") == (ClaimResult.NOT_FOUND, None)
     store.enter("c1", "5567999990001", NOW, NOW + TTL)
     store.append("c1", "in", "oi", NOW)
-    released = store.release("c1")
+    result, released = store.release("c1", "ana")  # sem dono: qualquer operador devolve
+    assert result is ClaimResult.OK
     assert released is not None
     assert released.phone == "5567999990001"
     assert [m.text for m in released.messages] == ["oi"]
     assert not store.is_human("c1", NOW)
     assert store.list_active(NOW) == []
+
+
+def test_release_by_non_owner_is_refused_and_keeps_the_conversation(store: Any) -> None:
+    store.enter("c1", "5567999990001", NOW, NOW + TTL)
+    store.append("c1", "in", "oi", NOW)
+    store.claim("c1", "ana", NOW, NOW + TTL)
+    assert store.release("c1", "bia") == (ClaimResult.TAKEN, None)
+    assert store.is_human("c1", NOW)
+    assert [m.text for m in store.get("c1", NOW).messages] == ["oi"]
+    assert store.release("c1", "ana")[0] is ClaimResult.OK
+
+
+def test_concurrent_claim_and_release_never_free_a_taken_conversation(store: Any) -> None:
+    """Corrida: bia assume enquanto ana (sem dono ainda) devolve; ou um ou outro, nunca os dois."""
+    for i in range(30):
+        cid = f"r{i}"
+        store.enter(cid, "5567999990001", NOW, NOW + TTL)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            claim = pool.submit(store.claim, cid, "bia", NOW, NOW + TTL)
+            release = pool.submit(store.release, cid, "ana")
+        claimed, (released, _) = claim.result(), release.result()
+        if released is ClaimResult.OK:  # ana apagou antes: bia não pode ter ficado com dono
+            assert claimed is ClaimResult.NOT_FOUND
+            assert not store.is_human(cid, NOW)
+        else:  # bia assumiu antes: ana é recusada e a conversa segue de bia
+            assert claimed is ClaimResult.OK
+            assert released is ClaimResult.TAKEN
+            assert store.get(cid, NOW).operator == "bia"
 
 
 def test_list_active_orders_by_entry(store: Any) -> None:

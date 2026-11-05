@@ -53,7 +53,11 @@ class RedisHandoffStore:
         return data if data["expires_at"] > now else None
 
     def _update[T](
-        self, conv_id: str, now: float, change: Callable[[_Data | None], tuple[_Data | None, T]]
+        self,
+        conv_id: str,
+        now: float,
+        change: Callable[[_Data | None], tuple[_Data | None, T]],
+        effects: Callable[[Pipeline], None] | None = None,
     ) -> T:
         """Lê-altera-grava sob ``WATCH``: ``change(dados) -> (dados novos ou None, resultado)``."""
         key = self._conv(conv_id)
@@ -63,6 +67,8 @@ class RedisHandoffStore:
             if updated is not None:
                 pipe.multi()
                 pipe.set(key, json.dumps(updated), exat=int(updated["expires_at"]) + _GRACE_SECONDS)
+                if effects is not None:
+                    effects(pipe)  # entram na mesma MULTI: tudo ou nada
             return result
 
         return cast(T, self._r.transaction(run, key, value_from_callable=True))  # type: ignore[arg-type]
@@ -82,11 +88,11 @@ class RedisHandoffStore:
             }
             return fresh, True
 
-        entered = self._update(conv_id, now, change)
-        if entered:
-            self._r.delete(self._msgs(conv_id))  # descarta histórico de uma conversa expirada
-            self._r.sadd(f"{self._p}index", conv_id)
-        return entered
+        def effects(pipe: Pipeline) -> None:
+            pipe.delete(self._msgs(conv_id))  # descarta histórico de uma conversa expirada
+            pipe.sadd(f"{self._p}index", conv_id)
+
+        return self._update(conv_id, now, change, effects)
 
     def is_human(self, conv_id: str, now: float) -> bool:
         """``True`` se a conversa está em handoff e não expirou."""
@@ -163,17 +169,31 @@ class RedisHandoffStore:
 
         return self._update(conv_id, now, change)
 
-    def release(self, conv_id: str) -> HandoffConversation | None:
-        """Devolve ao bot: apaga conversa e histórico."""
-        raw = self._r.get(self._conv(conv_id))
-        if raw is None:
-            return None
-        released = self._build(conv_id, json.loads(raw))
-        pipe = self._r.pipeline()
-        pipe.delete(self._conv(conv_id), self._msgs(conv_id))
-        pipe.srem(f"{self._p}index", conv_id)
-        pipe.execute()
-        return released
+    def release(
+        self, conv_id: str, operator: str
+    ) -> tuple[ClaimResult, HandoffConversation | None]:
+        """Devolve ao bot se ``operator`` é o dono (ou não há dono); apaga conversa e histórico."""
+        key = self._conv(conv_id)
+        outcome: list[tuple[ClaimResult, HandoffConversation | None]] = []
+
+        def run(pipe: Pipeline) -> None:
+            outcome.clear()
+            raw = pipe.get(key)  # WATCH em ``key``: mudança de dono até o EXEC aborta e repete
+            if raw is None:
+                outcome.append((ClaimResult.NOT_FOUND, None))
+                return
+            data: _Data = json.loads(raw)
+            if data["operator"] not in (None, operator):
+                outcome.append((ClaimResult.TAKEN, None))
+                return
+            released = self._build(conv_id, data)
+            pipe.multi()
+            pipe.delete(key, self._msgs(conv_id))
+            pipe.srem(f"{self._p}index", conv_id)
+            outcome.append((ClaimResult.OK, released))
+
+        self._r.transaction(run, key)
+        return outcome[-1]
 
     def first_seen(self, message_id: str, now: float) -> bool:
         """``True`` na 1ª vez que o id aparece (``SET NX`` com TTL de 24h)."""

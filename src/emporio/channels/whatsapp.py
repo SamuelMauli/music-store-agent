@@ -256,10 +256,10 @@ class WhatsAppChannel:
             HandoffNotFoundError: Não está em handoff.
             HandoffConflictError: A conversa é de outro operador.
         """
-        conversation = self.detail(conv_id)
-        if conversation.operator not in (None, operator):
+        result, conversation = self._store.release(conv_id, operator)  # checagem atômica
+        if result is ClaimResult.TAKEN:
             raise HandoffConflictError("conversa assumida por outro operador")
-        if self._store.release(conv_id) is None:
+        if conversation is None:
             raise HandoffNotFoundError(conv_id)
         log.info("handoff devolvido ao bot contato=%s", conv_id[:12])
         self._safe_send(conversation.phone, RETURN_NOTICE, conv_id)

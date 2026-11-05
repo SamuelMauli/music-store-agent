@@ -14,7 +14,9 @@ log = logging.getLogger("emporio.whatsapp")
 
 GRAPH_BASE_URL = "https://graph.facebook.com"
 MAX_TEXT_CHARS = 4096  # limite do corpo de texto do WhatsApp
-_RETRY_STATUS = frozenset({429, 502, 503, 504})
+# 429 e 503 são recusas explícitas (nada foi processado); 502/504 são ambíguos como o timeout
+# de leitura (o gateway pode ter repassado a mensagem), então não se repete.
+_RETRY_STATUS = frozenset({429, 503})
 # Só falhas em que a requisição comprovadamente não chegou à Meta: um timeout de leitura é
 # ambíguo (a mensagem pode ter saído) e repetir duplicaria o texto para o cliente.
 _RETRY_ERRORS = (httpx.ConnectError, httpx.ConnectTimeout)

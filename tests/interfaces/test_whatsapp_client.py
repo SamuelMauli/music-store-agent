@@ -80,7 +80,7 @@ def test_retries_connect_errors_and_gives_up() -> None:
     assert calls == 3
 
 
-@pytest.mark.parametrize("status", [400, 401, 403, 404, 500])
+@pytest.mark.parametrize("status", [400, 401, 403, 404, 500, 502, 504])
 def test_definitive_failures_are_not_retried(status: int) -> None:
     calls = 0
 

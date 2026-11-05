@@ -148,15 +148,24 @@ class SqliteHandoffStore:
             )
             return cursor.rowcount == 1
 
-    def release(self, conv_id: str) -> HandoffConversation | None:
-        """Devolve ao bot: apaga conversa e histórico (minimização de dado pessoal)."""
+    def release(
+        self, conv_id: str, operator: str
+    ) -> tuple[ClaimResult, HandoffConversation | None]:
+        """Devolve ao bot se ``operator`` é o dono (ou não há dono); apaga conversa e histórico."""
         with self._lock:
             row = self._con.execute(_SELECT + " WHERE id = ?", (conv_id,)).fetchone()
             if row is None:
-                return None
+                return ClaimResult.NOT_FOUND, None
             released = self._load(row)
-            self._purge(conv_id)
-            return released
+            # o DELETE condicional é a trava: só apaga se o dono não mudou desde a leitura
+            cursor = self._con.execute(
+                "DELETE FROM wa_conversation WHERE id = ? AND (operator IS NULL OR operator = ?)",
+                (conv_id, operator),
+            )
+            if cursor.rowcount != 1:
+                return ClaimResult.TAKEN, None
+            self._con.execute("DELETE FROM wa_message WHERE conversation_id = ?", (conv_id,))
+            return ClaimResult.OK, released
 
     def first_seen(self, message_id: str, now: float) -> bool:
         """``True`` na 1ª vez que o id aparece; o registro expira em 24h."""
