@@ -23,6 +23,7 @@ from emporio.domain.text import normalize_text
 _INTENTS_LINE: Final = re.compile(r"Interpretação desta mensagem \(roteador\): (.*)\.\s*$", re.M)
 _ENTITIES_LINE: Final = re.compile(r"^Entidades: (\{.*\})\s*$", re.M)
 _ORDER_LINE: Final = re.compile(r"Pedido em atendimento: (\d+)")
+_PENDING_LINE: Final = "O atendimento aguardava dados do cliente"
 _SOCIAL: Final = "conversa social"
 _SUPPORT_TEXT: Final = (
     "Posso te ajudar com instrumentos, preços, pedidos, trocas e informações da loja. "
@@ -234,6 +235,7 @@ class FakeLLM:
             brands=self._brands,
             focus=fake_nlu.parse_focus(system),
             order_id=int(order.group(1)) if order else None,
+            pending=_PENDING_LINE in system,
         )
         try:
             parsed = schema.model_validate(decision.model_dump(mode="json"))

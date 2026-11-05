@@ -259,6 +259,7 @@ def analyze(
     brands: Collection[str] = (),
     focus: Sequence[Focus] = (),
     order_id: int | None = None,
+    pending: bool = False,
 ) -> RouteDecision:
     """Classifica a mensagem por regras, cláusula a cláusula (multi-intent).
 
@@ -267,6 +268,7 @@ def analyze(
         brands: Primeiras palavras dos nomes do catálogo, normalizadas.
         focus: Produtos citados antes, para resolver referências.
         order_id: Pedido em atendimento.
+        pending: Há pergunta pendente; resposta curta só com dados vira baixa confiança.
 
     Returns:
         Decisão com confiança alta quando alguma regra casou, baixa caso contrário.
@@ -306,6 +308,8 @@ def analyze(
         intents.extend(clause_intents)
     if order_id is not None:
         entities.setdefault("order_id", order_id)
+    if pending and not intents and entities:
+        return RouteDecision(confidence=0.3, entities=Entities.model_validate(entities))
     return _decide(text, intents, entities, ambiguous_reference)
 
 

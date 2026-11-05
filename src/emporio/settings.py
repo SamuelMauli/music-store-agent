@@ -27,6 +27,7 @@ class Settings(BaseSettings):
             oficial no manual, o default é só a capital (``EMPORIO_METRO_CITIES`` em JSON).
         policy_retriever: ``long_context`` (manual inteiro) ou ``hybrid`` (BM25 + denso + RRF).
         reference_datetime: "Agora" simulado; os dados vão de out/2025 a mar/2026.
+        use_system_clock: Usa o relógio real em vez de ``reference_datetime``.
         llm_provider: ``openai_compatible`` (Groq, Ollama, OpenAI...) ou ``fake`` (offline).
         llm_base_url: Endpoint OpenAI-compatível.
         llm_api_key: Chave do provedor; nunca logada.
@@ -48,6 +49,7 @@ class Settings(BaseSettings):
     metro_cities: list[str] = ["Campo Grande"]
     policy_retriever: Literal["long_context", "hybrid"] = "long_context"
     reference_datetime: datetime = datetime(2026, 3, 25, 10, 0, tzinfo=ZoneInfo(_STORE_TZ))
+    use_system_clock: bool = False
     llm_provider: Literal["openai_compatible", "fake"] = "openai_compatible"
     llm_base_url: str = "https://api.groq.com/openai/v1"
     llm_api_key: SecretStr | None = None
