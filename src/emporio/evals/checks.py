@@ -46,8 +46,13 @@ class Outcome:
 def _same(expected: Any, actual: Any) -> bool:
     if isinstance(expected, str) and isinstance(actual, str):
         return normalize_text(expected) == normalize_text(actual)
-    if isinstance(expected, int | float) and isinstance(actual, int | float):
-        return float(expected) == float(actual)
+    if isinstance(expected, int | float) and not isinstance(expected, bool):
+        # Provedores diferem no tipo do argumento (Gemini manda "1000.0"); o input_model da
+        # tool aceita os dois, então o eval compara o VALOR que a tool de fato executa.
+        try:
+            return float(expected) == float(actual)
+        except (TypeError, ValueError):
+            return False
     return bool(expected == actual)
 
 

@@ -93,6 +93,11 @@ def test_tool_matches_subset_and_normalization() -> None:
     assert not tool_matches(ToolExpect(name="estimate_shipping", args={"city": "Rio"}), traces)
     assert not tool_matches(ToolExpect(name="get_product"), traces)
     assert tool_matches(ToolExpect(name="x", args={"n": 2}), [trace("x", {"n": 2.0})])
+    # Gemini manda número como string; a tool valida e executa o mesmo valor.
+    gemini = [trace("search_products", {"category": "violão", "max_price": "1000.0"})]
+    assert tool_matches(ToolExpect(name="search_products", args={"max_price": 1000}), gemini)
+    assert not tool_matches(ToolExpect(name="x", args={"n": 2}), [trace("x", {"n": "dois"})])
+    assert not tool_matches(ToolExpect(name="x", args={"n": 2}), [trace("x", {"n": None})])
 
 
 def test_evaluate_passes_when_everything_matches() -> None:
