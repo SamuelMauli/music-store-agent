@@ -19,6 +19,7 @@ dependencies = [
     "numpy>=2.5.4",
     "opentelemetry-sdk>=1.45.2",
     "pdfplumber>=0.11.10",
+    "prometheus-client>=0.26.0",
     "pydantic>=2.14.3",
     "pydantic-settings>=2.16.2",
     "pyyaml>=6.0.3",
@@ -31,12 +32,32 @@ dependencies = [
     "uvicorn>=0.54.0",
 ]
 
+[project.optional-dependencies]
+all = ["emporio[anthropic,google,bedrock,postgres,redis]"]
+anthropic = [
+    "langchain-anthropic>=1.7.10",
+]
+google = [
+    "langchain-google-genai>=3.2.0",
+]
+bedrock = [
+    "langchain-aws>=1.9.1",
+]
+postgres = [
+    "langgraph-checkpoint-postgres>=3.2.0",
+    "psycopg[binary,pool]>=3.3.8",
+]
+redis = [
+    "redis>=8.1.0",
+]
+
 [build-system]
 requires = ["uv_build>=0.11.8,<0.12.0"]
 build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "fakeredis>=2.40.0",
     "hypothesis>=6.170.14",
     "mypy>=2.4.1",
     "pre-commit>=4.7.0",

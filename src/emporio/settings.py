@@ -63,6 +63,20 @@ class Settings(BaseSettings):
         otel_exporter: ``none`` (no-op), ``console``, ``jsonl`` (arquivo) ou ``otlp``.
         otel_jsonl_path: Destino do exportador ``jsonl`` (ignorado no git).
         otel_endpoint: Endpoint OTLP/HTTP dos traces (exige o pacote do exportador OTLP).
+        env: ``dev`` ou ``prod``; em ``prod`` a aplicação recusa subir com configuração
+            insegura ou que não escala (ver ``emporio.production``).
+        state_backend: ``sqlite`` (processo único) ou ``postgres`` (memória de sessão e
+            chamados compartilhados entre réplicas).
+        database_url: DSN do Postgres (``postgresql://...``) quando ``state_backend=postgres``.
+        redis_url: URL do Redis; presente, limites de taxa e tentativas de verificação ficam
+            no Redis (valem entre réplicas). Ausente, ficam em memória do processo.
+        api_keys: Chaves aceitas na API (``Authorization: Bearer`` ou ``X-API-Key``); mais de
+            uma permite rotação sem downtime. Vazio em ``dev`` = API aberta.
+        log_format: ``text`` (humano) ou ``json`` (uma linha por evento, com ``request_id``).
+        log_level: Nível do logger raiz.
+        metrics_enabled: Expõe ``GET /metrics`` no formato Prometheus.
+        cors_origins: Origens liberadas para CORS (vazio = CORS desligado).
+        max_message_chars: Tamanho máximo de uma mensagem do cliente.
     """
 
     model_config = SettingsConfigDict(env_prefix="EMPORIO_", env_file=".env", extra="ignore")
@@ -104,6 +118,17 @@ class Settings(BaseSettings):
     otel_exporter: Literal["none", "console", "jsonl", "otlp"] = "none"
     otel_jsonl_path: Path = Path("data/traces.jsonl")
     otel_endpoint: str = "http://localhost:4318/v1/traces"
+    # --- Produção: perfil, estado compartilhado e operação --------------------------------
+    env: Literal["dev", "prod"] = "dev"
+    state_backend: Literal["sqlite", "postgres"] = "sqlite"
+    database_url: SecretStr | None = None
+    redis_url: SecretStr | None = None
+    api_keys: list[SecretStr] = []
+    log_format: Literal["text", "json"] = "text"
+    log_level: str = "INFO"
+    metrics_enabled: bool = True
+    cors_origins: list[str] = []
+    max_message_chars: int = 2000
 
     def price_for(self, model: str, tier: Literal["small", "medium"]) -> tuple[float, float]:
         """Preço (entrada, saída) por milhão de tokens: tabela por modelo, senão o do tier."""
