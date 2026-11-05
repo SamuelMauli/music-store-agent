@@ -23,6 +23,30 @@ _ENDED: Final = re.compile(
 )
 
 
+_CLOSING_MAX_CHARS: Final = 90
+
+
+def _append(answer: str, sentence: str) -> str:
+    """Acrescenta ``sentence`` ao corpo da resposta, antes da pergunta de fechamento.
+
+    O modelo costuma encerrar com um parágrafo curto do tipo "Posso ajudar em mais alguma
+    coisa?". Um fato acrescentado depois dele fica fora de ordem para o cliente, então o fato
+    entra no fim do parágrafo anterior; sem fechamento, vai para o fim da resposta.
+
+    Args:
+        answer: Resposta já redigida.
+        sentence: Frase determinística a acrescentar.
+
+    Returns:
+        A resposta com a frase no lugar certo.
+    """
+    body, sep, closing = answer.rstrip().rpartition("\n\n")
+    is_closing = closing.endswith("?") and len(closing) <= _CLOSING_MAX_CHARS
+    if not sep or not body.strip() or not is_closing:
+        return f"{answer} {sentence}".strip()
+    return f"{body.rstrip()} {sentence}\n\n{closing}"
+
+
 def _last_ok(traces: list[dict[str, Any]], name: str) -> dict[str, Any] | None:
     for trace in reversed(traces):
         if trace["name"] == name and trace["status"] == "ok":
@@ -77,7 +101,7 @@ def with_return_verdict(answer: str, traces: list[dict[str, Any]]) -> str:
     extra = [f"Você está no {data['window']}."]
     if data.get("deadline") and str(data["deadline"]) not in answer:
         extra.append(f"Prazo até {data['deadline']}.")
-    return f"{answer} {' '.join(extra)}".strip()
+    return _append(answer, " ".join(extra))
 
 
 def ended_promotions(traces: list[dict[str, Any]]) -> list[str]:
@@ -95,6 +119,5 @@ def with_promotion_status(answer: str, traces: list[dict[str, Any]]) -> str:
     if not ended or _ENDED.search(text):
         return answer
     names = " e ".join(ended)
-    return (
-        f"{answer} A promoção {names} deste produto foi encerrada e não está mais valendo.".strip()
-    )
+    note = f"A promoção {names} deste produto foi encerrada e não está mais valendo."
+    return _append(answer, note)

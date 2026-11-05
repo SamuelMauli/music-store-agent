@@ -81,6 +81,18 @@ def test_answer_is_made_explicit_when_the_tool_says_the_promotion_ended() -> Non
     assert "foi encerrada e não está mais" in with_promotion_status(wrong, [_trace(["X"])])
 
 
+def test_ended_promotion_note_goes_before_the_closing_question() -> None:
+    answer = "O violão sai por R$ 899,00.\n\nPosso ajudar em mais alguma coisa?"
+    out = with_promotion_status(answer, [_trace(["Black Friday"])])
+    assert out == (
+        "O violão sai por R$ 899,00. A promoção Black Friday deste produto foi encerrada "
+        "e não está mais valendo.\n\nPosso ajudar em mais alguma coisa?"
+    )
+    long_question = "Quer que eu compare " + "este modelo com outros violões " * 4 + "?"
+    tail = with_promotion_status(f"R$ 899,00.\n\n{long_question}", [_trace(["X"])])
+    assert tail.endswith("não está mais valendo.")
+
+
 def test_get_product_tells_about_ended_campaigns_without_their_percentage(call: Caller) -> None:
     payload = json.loads(call("get_product", name_or_id="91").payload)["data"]
     assert not payload.get("promotion")
