@@ -58,12 +58,12 @@ make api                             # ou: API FastAPI em http://127.0.0.1:8000
 | `make ingest` | Roda `python -m emporio.ingestion`: lê `data/raw/`, valida contra `data/contracts/`, grava `data/emporio.duckdb` e `data/quality_report.json`. Idempotente. |
 | `make chat` | CLI de conversa. Comandos: `/debug`, `/reset`, `/sair`. Aceita `ARGS="--debug"`. |
 | `make api` | Sobe `uvicorn` com a fábrica `emporio.interfaces.api:create_app` em `127.0.0.1:8000`. |
-| `make test` | `pytest` com cobertura: 542 testes passam, 1 é pulado (frescor do relatório live) e 2 `live` ficam desligados; cobertura de 95,3% (piso de 80%). |
+| `make test` | `pytest` com cobertura: 593 testes passam, 1 é pulado (frescor do relatório live) e 2 `live` ficam desligados; cobertura de 95,5% (piso de 80%). |
 | `make lint` / `make typecheck` | `ruff check` + `ruff format --check` / `mypy --strict src`. |
 | `make check` | `lint` + `typecheck` + `test`; é o que o CI executa. |
 | `make eval-retrieval` | Recall@3 e MRR das estratégias de recuperação (ablation). |
 | `make eval` | Avaliação do agente offline (LLM fake, todos os casos); falha abaixo do piso de qualidade. |
-| `make eval-replay` | Reproduz offline o cassete gravado pelo `eval-live`. |
+| `make eval-replay` | Reproduz offline o cassete gravado pelo `eval-live`. Casos sem gravação para o prompt atual saem como `STALE` (aviso, exit 0); falha real com cassete válido continua reprovando. |
 | `make eval-live` | Avaliação com provedor real (`EMPORIO_LLM_*`); grava cassete e relatório em `evals/reports/`. Em plano gratuito use `EMPORIO_EVAL_SLEEP=62 make eval-live`. |
 | `make examples` | Gera as transcrições de `examples/` com provedor real (`EMPORIO_EVAL_SLEEP=62` no plano gratuito). |
 
@@ -72,10 +72,10 @@ make api                             # ou: API FastAPI em http://127.0.0.1:8000
 ```bash
 curl -N http://127.0.0.1:8000/v1/chat \
   -H 'content-type: application/json' \
-  -d '{"session_id": "demo-1", "message": "Quanto custa o Takamine GD20?"}'
+  -d '{"message": "Quanto custa o Takamine GD20?"}'
 ```
 
-`POST /v1/chat` responde em Server-Sent Events: eventos `step` (nó do grafo), `token` (trechos da resposta) e um evento final com o resumo do turno. `session_id` (`[\w-]{1,64}`) identifica a memória da conversa; sem ele, um novo é gerado. Erros usam um envelope único `{"error": {"code", "message", "request_id"}}` com `X-Request-ID`; excesso de mensagens devolve `429` com `Retry-After`. Também existem `GET /healthz` (liveness) e `GET /readyz` (verifica o DuckDB).
+`POST /v1/chat` responde em Server-Sent Events: eventos `step` (nó do grafo), `token` (trechos da resposta) e um evento final com o resumo do turno. O `session_id` é emitido e assinado pelo servidor (HMAC-SHA256, 128 bits aleatórios): a 1ª mensagem vai sem ele e o token volta no cabeçalho `X-Session-Id` e no evento final; reenvie-o para continuar a conversa. Token sem assinatura ou forjado devolve `400 invalid_session`. Erros usam um envelope único `{"error": {"code", "message", "request_id"}}` com `X-Request-ID`; excesso de mensagens devolve `429` com `Retry-After`. Também existem `GET /healthz` (liveness) e `GET /readyz` (verifica o DuckDB).
 
 ### Docker
 
@@ -103,6 +103,12 @@ Nada de modelo fixo no código: tudo vem de variáveis `EMPORIO_*` (arquivo `.en
 | `EMPORIO_REFERENCE_DATETIME` | "Agora" simulado (dados vão de out/2025 a mar/2026) | `2026-03-25T10:00:00-04:00` |
 | `EMPORIO_METRO_CITIES` | Cidades da região metropolitana (JSON) | `["Campo Grande"]` |
 | `EMPORIO_RATE_LIMIT_PER_MINUTE` | Mensagens por sessão por minuto | `20` |
+| `EMPORIO_RATE_LIMIT_PER_IP_PER_MINUTE` | Mensagens por IP por minuto (vale entre sessões) | `60` |
+| `EMPORIO_TRUSTED_PROXY_HOPS` | Proxies confiáveis à frente; só então `X-Forwarded-For` é lido | `0` |
+| `EMPORIO_SESSION_SECRET` | Segredo (>= 16 bytes) que assina o `session_id`; ausente, vira aleatório por processo e as sessões não sobrevivem a reinício | vazio |
+| `EMPORIO_VERIFICATION_TTL_SECONDS` | Validade da verificação de identidade | `900` |
+| `EMPORIO_VERIFY_MAX_ATTEMPTS_PER_TARGET` / `_PER_IP` | Tentativas de verificação falhas por pedido ou contato / por IP antes do bloqueio | `5` / `10` |
+| `EMPORIO_VERIFY_LOCKOUT_SECONDS` | Duração do bloqueio por excesso de tentativas | `900` |
 | `EMPORIO_OTEL_EXPORTER` | `none`, `console`, `jsonl` ou `otlp` | `none` |
 
 Exemplos:
@@ -351,13 +357,13 @@ O p95 alto vem do backoff por rate limit do plano gratuito, não do agente: a me
 2. `devolucao-pedido-7-fora-do-prazo` (falha real): o modelo não chamou `check_return_eligibility` e não citou o §4.1.
 3. `prod-takamine-pix-parcelado` (expectativa rígida do caso): o caso exige a tool `simulate_payment`, e o agente respondeu só com `get_product` (que já traz o preço, o PIX e o parcelamento): R$ 2.199,00, PIX R$ 2.089,05 e 12x de R$ 183,25, todos ancorados na tool. A resposta estava certa, o critério era estreito demais.
 
-**Correções e o que ficou pendente.** As duas falhas reais de devolução motivaram os commits `c1ddc70` (devolução afirma elegibilidade a partir da tool e não abre chamado espontâneo) e `b9731ef` (devolução deduz o motivo e pergunta só o canal), e o `6d0a84d` resolveu pronome para o último produto citado e parou de ecoar percentual do cliente. Esses três ajustes foram validados ao vivo, isoladamente, nos casos que os motivaram. **A re-execução completa pós-correção não foi feita**: a cota diária do plano gratuito do Groq é de 200 mil tokens por dia por modelo, e uma rodada completa consome cerca de 100 mil. Por isso a tabela acima descreve o estado **anterior** às correções, e o relatório não foi regerado para não maquiar o número. Por consequência, o cassete gravado nessa execução já não casa com os prompts atuais, e `make eval-replay` falha por falta de gravação até um novo `make eval-live` regravá-lo; o teste de frescor do relatório (`tests/evals/test_evals.py`) apenas avisa (skip), sem bloquear o CI.
+**Correções e o que ficou pendente.** As duas falhas reais de devolução motivaram os commits `c1ddc70` (devolução afirma elegibilidade a partir da tool e não abre chamado espontâneo) e `b9731ef` (devolução deduz o motivo e pergunta só o canal), e o `6d0a84d` resolveu pronome para o último produto citado e parou de ecoar percentual do cliente. Esses três ajustes foram exercitados ao vivo, isoladamente, nos casos que os motivaram, **mas essa evidência não está versionada** (não há relatório nem cassete dessas execuções): o único relatório versionado é o anterior às correções. **A re-execução completa pós-correção não foi feita**: a cota diária do plano gratuito do Groq é de 200 mil tokens por dia por modelo, e uma rodada completa consome cerca de 100 mil. Por isso a tabela acima descreve o estado **anterior** às correções, e o relatório não foi regerado para não maquiar o número. Por consequência, o cassete gravado nessa execução já não casa com os prompts atuais, e `make eval-replay` marca esses casos como `STALE` (aviso, sem falhar) até um novo `make eval-live` regravá-lo; o teste de frescor do relatório (`tests/evals/test_evals.py`) apenas avisa (skip), sem bloquear o CI.
 
 #### Execução offline (CI)
 
 `make eval` (provider `fake`, determinístico): **54 casos executados, 54 aprovados (100%)**, acurácia de tool 51/51, groundedness 30/30, segurança 20/20, 67 turnos e 138 chamadas simuladas. Outros 17 casos dependem de modelo real (`fake: false`) e são pulados nesse modo. Esse gate roda dentro do `pytest` e, portanto, no CI. Ele valida o grafo, as guardas, as tools e o roteamento, não a qualidade do modelo real: para isso existe a execução ao vivo acima.
 
-`make eval-replay` repete o cassete gravado pelo `eval-live`, sem rede. Hoje ele reprova (acurácia de tool 43,5%) pelo motivo descrito acima: o cassete é anterior às correções de prompt e lógica.
+`make eval-replay` repete o cassete gravado pelo `eval-live`, sem rede. O cassete é anterior às correções de prompt e lógica; por isso, os casos sem gravação para o prompt atual saem como `STALE`, com o aviso `cassete desatualizado: rode make eval-live`, e ficam fora do resumo e do gate (exit 0). Cassete válido com falha real continua reprovando. Os testes cobrem os dois caminhos.
 
 ## Segurança e LGPD
 
@@ -370,7 +376,8 @@ Threat model resumido, alinhado ao OWASP para aplicações com LLM:
 | **Prompt injection** | `input_guard` normaliza (NFKC, caracteres invisíveis) e detecta padrões PT/EN de "ignore as regras" e "revele o prompt"; a defesa de fundo é a guarda de saída, que barra eco do prompt (shingles) e números sem origem. |
 | **Alucinação numérica** | Grounding numérico: valores monetários, percentuais e decimais da resposta precisam existir nas saídas das tools ou do manual citado. Reprovada, é regenerada uma vez; persistindo, cai em resposta segura com handoff. |
 | **Protocolo inventado** | Qualquer `EMP-...` na resposta precisa corresponder ao protocolo devolvido por `open_ticket`; protocolo inventado é barrado. |
-| **Abuso / custo** | Limite de mensagens por sessão (janela deslizante, `EMPORIO_RATE_LIMIT_PER_MINUTE`), limite de 2000 caracteres no texto e de 4000 no corpo da API, 4 tool calls por turno, limite de recursão do grafo. |
+| **Abuso / custo** | Limite de mensagens por sessão e por IP (janela deslizante com varredura por TTL e teto de chaves, `EMPORIO_RATE_LIMIT_PER_MINUTE` e `EMPORIO_RATE_LIMIT_PER_IP_PER_MINUTE`), tentativas de verificação limitadas por pedido, contato e IP com bloqueio temporário, limite de 2000 caracteres no texto e de 4000 no corpo da API, 4 tool calls por turno, limite de recursão do grafo. |
+| **Sessão sequestrada / adivinhada** | `session_id` gerado e assinado pelo servidor (HMAC, 128 bits); cliente não escolhe o id. A verificação de identidade expira (`EMPORIO_VERIFICATION_TTL_SECONDS`) e o armazenamento de tentativas é em memória, de um único processo (trocável por Redis atrás da porta `AttemptStore`). |
 | **Segredos** | Chave do LLM só por ambiente (`SecretStr`); `.env` fora do git e da imagem Docker. |
 
 Os testes de guardas (`tests/guardrails`) e o gate offline da avaliação (`make eval`, executado dentro do `pytest`) rodam no CI, e a pipeline falha se regredirem. Citação de política obrigatória nas tools que a produzem (`check_return_eligibility`, `search_policies`) é conferida pela guarda de saída. Emojis são removidos da resposta para manter o tom da loja.
@@ -384,7 +391,7 @@ Os testes de guardas (`tests/guardrails`) e o gate offline da avaliação (`make
 
 ## Exemplos de conversa
 
-Conversas geradas por execução real contra o provedor (`openai/gpt-oss-20b` na resposta e no roteador, via Groq), com `make examples`, registrando a data de referência, as tools e as seções citadas:
+Conversas geradas por execução real contra o provedor (`openai/gpt-oss-20b` na resposta e no roteador, via Groq), com `make examples`, registrando a data de referência, as tools e as seções citadas. Os e-mails e telefones do cliente aparecem mascarados nas transcrições (o agente recebeu o valor real), e um cabeçalho de cada arquivo avisa isso:
 
 | Arquivo | Cenário | O que demonstra |
 | --- | --- | --- |
