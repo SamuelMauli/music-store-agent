@@ -33,7 +33,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-all = ["emporio[anthropic,google,bedrock,postgres,redis]"]
+all = ["emporio[anthropic,google,vertex,bedrock,postgres,redis]"]
 anthropic = [
     "langchain-anthropic>=1.7.10",
 ]
@@ -49,6 +49,9 @@ postgres = [
 ]
 redis = [
     "redis>=8.1.0",
+]
+vertex = [
+    "langchain-google-vertexai>=3.0",
 ]
 
 [build-system]
