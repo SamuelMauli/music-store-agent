@@ -16,6 +16,7 @@ from emporio.evals.cases import SUITES, Case, load_cases
 from emporio.evals.runner import (
     CASSETTE_PATH,
     REPORT_DIR,
+    STALE_MESSAGE,
     CaseResult,
     Evaluator,
     RunOptions,
@@ -54,7 +55,7 @@ def _judge_llm(settings: Settings) -> LLMProvider:
 
 def _print(results: list[CaseResult], summary: dict[str, Any]) -> None:
     for r in results:
-        mark = "ok  " if r.passed else "FAIL"
+        mark = "STALE" if r.stale else "ok  " if r.passed else "FAIL"
         print(f"{mark} {r.suite}/{r.id}")
         for failure in r.failures:
             print(f"       - {failure}")
@@ -63,6 +64,7 @@ def _print(results: list[CaseResult], summary: dict[str, Any]) -> None:
 
 def gate(summary: dict[str, Any], results: list[CaseResult]) -> list[str]:
     """Violações do piso de qualidade do CI (tool, groundedness, PII/BOLA, qualquer caso)."""
+    results = [r for r in results if not r.stale]
     problems = [f"caso reprovado: {r.suite}/{r.id}" for r in results if not r.passed]
     tool = cast("dict[str, Any]", summary["tool_accuracy"])["rate"]
     grounded = cast("dict[str, Any]", summary["groundedness"])["rate"]
@@ -112,6 +114,14 @@ def main(argv: list[str] | None = None) -> int:
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         print(f"relatório: {out}")
+    stale = [r for r in results if r.stale]
+    if stale:
+        print(
+            f"AVISO: {STALE_MESSAGE} ({len(stale)} de {len(results)} casos sem gravação para o "
+            f"prompt atual {report['prompt_hash']}); esses casos foram marcados stale e não "
+            "entram no resultado.",
+            file=sys.stderr,
+        )
     problems = gate(report["summary"], results)
     for problem in problems:
         print(f"GATE: {problem}", file=sys.stderr)

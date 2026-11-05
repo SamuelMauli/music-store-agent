@@ -29,6 +29,7 @@ from emporio.settings import Settings
 Mode = Literal["fake", "live", "replay"]
 CASSETTE_PATH = Path("evals/cassettes/live.jsonl")
 REPORT_DIR = Path("evals/reports")
+STALE_MESSAGE = "cassete desatualizado: rode make eval-live"
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,6 +64,7 @@ class CaseResult:
     grounded_ok: bool | None
     turns: list[dict[str, Any]] = field(default_factory=list)
     judge: dict[str, Any] | None = None
+    stale: bool = False
 
 
 def percentile(values: list[int], pct: float) -> int:
@@ -160,7 +162,8 @@ class Evaluator:
                 hour=10, tzinfo=settings.reference_datetime.tzinfo
             )
             settings = settings.model_copy(update={"reference_datetime": when})
-        container = build_container(settings, llm=self._llm(settings))
+        llm = self._llm(settings)
+        container = build_container(settings, llm=llm)
         session = f"eval-{case.id}-{uuid.uuid4().hex[:6]}"
         records: list[TurnRecord] = []
         error = ""
@@ -188,9 +191,24 @@ class Evaluator:
             error = f"erro na execução: {type(exc).__name__}: {exc}"
         finally:
             container.close()
-        return self._result(case, records, error)
+        stale = isinstance(llm, ReplayLLM) and llm.misses > 0
+        return self._result(case, records, error, stale=stale)
 
-    def _result(self, case: Case, records: list[TurnRecord], error: str) -> CaseResult:
+    def _result(
+        self, case: Case, records: list[TurnRecord], error: str, *, stale: bool = False
+    ) -> CaseResult:
+        if stale:
+            return CaseResult(
+                case.id,
+                case.suite,
+                case.tags,
+                False,
+                [STALE_MESSAGE],
+                None,
+                None,
+                stale=True,
+                turns=[_record(r) for r in records],
+            )
         if error or not records:
             outcome = Outcome(failures=[error or "sem turnos"])
         else:
@@ -204,8 +222,8 @@ class Evaluator:
             outcome.failures,
             outcome.tool_ok,
             outcome.grounded_ok,
-            [_record(r) for r in records],
-            score,
+            turns=[_record(r) for r in records],
+            judge=score,
         )
 
     def _judge(
@@ -246,12 +264,15 @@ def _rate(flags: list[bool]) -> dict[str, Any]:
 
 def summarize(results: list[CaseResult]) -> dict[str, Any]:
     """Métricas agregadas: aprovação, tool, groundedness, segurança, latência, tokens e custo."""
+    stale = sum(r.stale for r in results)
+    results = [r for r in results if not r.stale]  # cassete velho não mede regressão
     turns = [t for r in results for t in r.turns]
     latencies = [int(t["latency_ms"]) for t in turns]
     cost = sum(float(t["cost_usd"]) for t in turns)
     security = [r.passed for r in results if {"bola", "pii", "injection"} & set(r.tags)]
     return {
         "cases": len(results),
+        "stale": stale,
         "passed": sum(r.passed for r in results),
         "pass_rate": round(sum(r.passed for r in results) / len(results), 4) if results else None,
         "tool_accuracy": _rate([r.tool_ok for r in results if r.tool_ok is not None]),

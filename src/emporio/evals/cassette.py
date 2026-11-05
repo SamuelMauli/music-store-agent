@@ -19,6 +19,7 @@ from emporio.agent.llm.types import (
     ToolCall,
     Usage,
 )
+from emporio.agent.prompts import prompt_hash
 
 
 def request_key(kind: str, tier: str, messages: list[Message], extra: Any) -> str:
@@ -34,10 +35,14 @@ class Cassette:
         """Abre o arquivo; ausente equivale a vazio."""
         self.path = path
         self._queues: dict[str, deque[dict[str, Any]]] = defaultdict(deque)
+        self.prompt_hashes: frozenset[str] = frozenset()
         if path.exists():
-            for line in path.read_text(encoding="utf-8").splitlines():
-                row = json.loads(line)
+            rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+            for row in rows:
                 self._queues[row["key"]].append(row)
+            self.prompt_hashes = frozenset(
+                str(r["prompt_hash"]) for r in rows if r.get("prompt_hash")
+            )
 
     def pop(self, key: str) -> dict[str, Any] | None:
         """Próxima gravação do pedido, ou ``None`` se acabou."""
@@ -72,6 +77,7 @@ class RecordingLLM:
         self._cassette.append(
             {
                 "key": request_key("complete", tier, messages, tools),
+                "prompt_hash": prompt_hash(),
                 "text": response.text,
                 "tool_calls": [
                     {"id": c.id, "name": c.name, "args": c.args} for c in response.tool_calls
@@ -94,6 +100,7 @@ class RecordingLLM:
         self._cassette.append(
             {
                 "key": request_key("structured", tier, messages, schema.__name__),
+                "prompt_hash": prompt_hash(),
                 "parsed": parsed.model_dump(mode="json"),
                 "usage": usage.to_dict(),
             }
@@ -102,15 +109,21 @@ class RecordingLLM:
 
 
 class ReplayLLM:
-    """Repete as gravações sem rede; pedido sem gravação é erro (prompt mudou: regrave)."""
+    """Repete as gravações sem rede; pedido sem gravação é erro (prompt mudou: regrave).
+
+    ``misses`` conta os pedidos sem gravação: com ``misses > 0`` o cassete é desatualizado
+    (o prompt ou as tools mudaram desde o ``eval-live``) e o resultado não vale como regressão.
+    """
 
     def __init__(self, cassette: Cassette) -> None:
         """Cria o repetidor."""
         self._cassette = cassette
+        self.misses = 0
 
     def _next(self, key: str) -> dict[str, Any]:
         row = self._cassette.pop(key)
         if row is None:
+            self.misses += 1
             raise LLMError("pedido sem gravação no cassete: rode make eval-live para regravar")
         return row
 

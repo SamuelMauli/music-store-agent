@@ -385,10 +385,47 @@ def test_runtime_error_is_a_failed_case_not_a_crash(ingested: Settings, tmp_path
     )
     options = RunOptions(mode="replay", live_only=True, cassette=tmp_path / "nada.jsonl")
     [res] = Evaluator(fake_settings(ingested), options).run([c])
+    assert res.stale
     assert not res.passed
-    assert "faltou mencionar" in res.failures[0]
+    assert res.failures == ["cassete desatualizado: rode make eval-live"]
     broken = Evaluator(fake_settings(ingested), RunOptions())._result(c, [], "erro na execução: X")
     assert broken.failures == ["erro na execução: X"]
+
+
+def test_stale_cases_are_left_out_of_summary_and_gate() -> None:
+    stale = CaseResult("s", "golden", [], False, ["x"], False, None, stale=True)
+    fresh = CaseResult("f", "golden", [], True, [], True, True)
+    summary = summarize([stale, fresh])
+    assert summary["cases"] == 1
+    assert summary["stale"] == 1
+    assert cli.gate(summary, [stale, fresh]) == []
+
+
+def test_fresh_failure_still_fails_the_gate() -> None:
+    bad = CaseResult("b", "golden", [], False, ["faltou mencionar x"], False, None)
+    problems = cli.gate(summarize([bad]), [bad])
+    assert "caso reprovado: golden/b" in problems
+
+
+def test_replay_with_stale_cassette_warns_and_exits_zero(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code = cli.main(["--mode", "replay", "--cassette", str(tmp_path / "vazio.jsonl")])
+    captured = capsys.readouterr()
+    assert code == 0
+    assert "STALE" in captured.out
+    assert "cassete desatualizado: rode make eval-live" in captured.err
+
+
+def test_replay_cassette_records_prompt_hash_and_counts_misses(tmp_path: Path) -> None:
+    path = tmp_path / "c.jsonl"
+    msgs = [{"role": "user", "content": "oi"}]
+    RecordingLLM(Scripted(), Cassette(path)).complete(msgs)
+    assert Cassette(path).prompt_hashes == {prompt_hash()}
+    replay = ReplayLLM(Cassette(tmp_path / "outro.jsonl"))
+    with pytest.raises(LLMError):
+        replay.complete(msgs)
+    assert replay.misses == 1
 
 
 def test_report_masks_pii_and_carries_prompt_hash(ingested: Settings) -> None:
