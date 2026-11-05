@@ -1,4 +1,4 @@
-.PHONY: llm-check docker-build compose-up compose-down setup setup-min ingest chat api test lint typecheck check eval-retrieval eval eval-replay eval-live examples
+.PHONY: train-guard llm-check docker-build compose-up compose-down setup setup-min ingest chat api test lint typecheck check eval-retrieval eval eval-replay eval-live examples
 
 # ambiente de desenvolvimento = ambiente do CI (todos os extras): make check passa sem ajuste
 setup:
@@ -64,3 +64,8 @@ compose-down:
 # diagnostico do LLM: credencial + chamada real (tool calling e saida estruturada) por papel
 llm-check:
 	uv run python -m emporio.agent.llm.doctor
+
+# guarda de injecao: regenera evals/guard/{train,test}.jsonl, treina (fastembed + logistica),
+# grava src/emporio/guardrails/injection_model.json e evals/guard/metrics.json
+train-guard:
+	uv run python -m emporio.evals.guard_train

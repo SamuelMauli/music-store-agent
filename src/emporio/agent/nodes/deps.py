@@ -17,6 +17,7 @@ from emporio.agent.state import ChatState
 from emporio.agent.tools import ToolContext, ToolExecution, ToolRegistry
 from emporio.domain.pii import mask_pii
 from emporio.guardrails.attempts import AttemptStore, InMemoryAttemptStore
+from emporio.guardrails.injection import LayeredInjectionGuard
 from emporio.ports import Clock, PolicyRetriever
 
 MAX_TOOL_CALLS: Final = 4
@@ -44,6 +45,7 @@ class Deps:
     attempts: AttemptStore = field(default_factory=InMemoryAttemptStore)
     verify_policy: VerifyPolicy = field(default_factory=VerifyPolicy)
     wall: Callable[[], float] = time.time
+    injection_guard: LayeredInjectionGuard = field(default_factory=LayeredInjectionGuard)
 
     @property
     def router(self) -> Router:

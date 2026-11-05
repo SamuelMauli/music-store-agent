@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import re
+import threading
+from functools import cache
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -54,12 +56,20 @@ class FastEmbedEmbedder:
         """Guarda o nome; o download só acontece no primeiro ``embed``."""
         self._model_name = model_name
         self._model: TextEmbedding | None = None
+        self._lock = threading.Lock()
 
     def embed(self, texts: list[str]) -> NDArray[np.float32]:
         """Vetores do modelo, renormalizados em L2."""
-        if self._model is None:
-            from fastembed import TextEmbedding  # noqa: PLC0415 - import caro, só se usado
+        with self._lock:  # requisições concorrentes não carregam o modelo duas vezes
+            if self._model is None:
+                from fastembed import TextEmbedding  # noqa: PLC0415 - import caro, só se usado
 
-            self._model = TextEmbedding(model_name=self._model_name, cache_dir=str(CACHE_DIR))
+                self._model = TextEmbedding(model_name=self._model_name, cache_dir=str(CACHE_DIR))
         vectors = np.array(list(self._model.embed(texts)), dtype=np.float32)
         return _unit(vectors)
+
+
+@cache
+def shared_embedder(model_name: str = DEFAULT_MODEL) -> FastEmbedEmbedder:
+    """Uma instância por modelo no processo: retrieval e guarda de injeção dividem o ONNX."""
+    return FastEmbedEmbedder(model_name)

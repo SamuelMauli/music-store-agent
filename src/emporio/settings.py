@@ -106,6 +106,8 @@ class Settings(BaseSettings):
         metrics_enabled: Expõe ``GET /metrics`` no formato Prometheus.
         cors_origins: Origens liberadas para CORS (vazio = CORS desligado).
         max_message_chars: Tamanho máximo de uma mensagem do cliente.
+        injection_classifier: Liga o classificador treinado de injeção sobre a heurística
+            (``guardrails/injection.py``); falhando o modelo, a heurística segue sozinha.
     """
 
     model_config = SettingsConfigDict(env_prefix="EMPORIO_", env_file=".env", extra="ignore")
@@ -117,6 +119,7 @@ class Settings(BaseSettings):
     timezone: str = _STORE_TZ
     metro_cities: list[str] = ["Campo Grande"]
     policy_retriever: Literal["long_context", "hybrid"] = "long_context"
+    injection_classifier: bool = True
     reference_datetime: datetime = datetime(2026, 3, 25, 10, 0, tzinfo=ZoneInfo(_STORE_TZ))
     checkpoint_path: Path = Path("data/checkpoints.sqlite")
     tickets_path: Path = Path("data/tickets.sqlite")
