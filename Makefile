@@ -1,4 +1,4 @@
-.PHONY: llm-check docker-build compose-up compose-down setup setup-min ingest chat api test lint typecheck check eval-retrieval eval eval-replay eval-live examples
+.PHONY: llm-check docker-build compose-up compose-down setup setup-min ingest chat api test lint typecheck check eval-retrieval eval eval-replay eval-live examples matrix judge-calibrate
 
 # ambiente de desenvolvimento = ambiente do CI (todos os extras): make check passa sem ajuste
 setup:
@@ -38,6 +38,15 @@ eval-replay:
 # throttle p/ plano gratuito: EMPORIO_EVAL_SLEEP=62 make eval-live
 eval-live:
 	uv run python -m emporio.evals --mode live
+
+# matriz custo x qualidade por familia (offline: le evals/reports/live-*.json, grava matrix.json)
+matrix:
+	uv run python -m emporio.evals matrix --expect openai
+
+# calibracao do juiz x evals/judge_labels.yaml; offline por padrao (juiz heuristico, nao e LLM).
+# MODE=replay repete o cassete gravado; MODE=live chama EMPORIO_EVAL_JUDGE_MODEL e grava o cassete
+judge-calibrate:
+	uv run python -m emporio.evals judge-calibrate --mode $(or $(MODE),fake)
 
 chat:
 	uv run python -m emporio.interfaces.cli $(ARGS)

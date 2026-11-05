@@ -1,4 +1,7 @@
-"""CLI das avaliações: ``python -m emporio.evals --mode fake|replay|live``."""
+"""CLI das avaliações: ``python -m emporio.evals --mode fake|replay|live``.
+
+Subcomandos: ``matrix`` (custo x qualidade por família) e ``judge-calibrate`` (juiz x rótulos).
+"""
 
 from __future__ import annotations
 
@@ -12,6 +15,7 @@ from typing import Any, cast
 
 from emporio.agent.llm import factory
 from emporio.agent.llm.types import LLMProvider
+from emporio.evals import calibration, matrix
 from emporio.evals.cases import SUITES, Case, load_cases
 from emporio.evals.runner import (
     CASSETTE_PATH,
@@ -84,7 +88,12 @@ def _cases(args: argparse.Namespace) -> list[Case]:
 
 def main(argv: list[str] | None = None) -> int:
     """Roda a avaliação e devolve o código de saída."""
-    args = _parse(sys.argv[1:] if argv is None else argv)
+    argv = sys.argv[1:] if argv is None else argv
+    if argv and argv[0] == "matrix":
+        return matrix.main(argv[1:])
+    if argv and argv[0] == "judge-calibrate":
+        return calibration.main(argv[1:])
+    args = _parse(argv)
     settings = load_settings()
     live_like = args.mode != "fake"
     if args.judge and not live_like:
