@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import duckdb
+import httpx
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.sqlite import SqliteSaver
 
@@ -22,20 +23,22 @@ from emporio.adapters.persistence import (
 )
 from emporio.adapters.persistence.sqlite_tickets import SqliteTicketRepository
 from emporio.adapters.retrieval import retriever_factory
+from emporio.adapters.whatsapp import GraphApiSender
 from emporio.agent.graph import build_graph
 from emporio.agent.llm import factory
 from emporio.agent.llm.types import LLMProvider
 from emporio.agent.nodes.deps import Deps, VerifyPolicy
 from emporio.agent.service import ChatService
 from emporio.agent.tools import ToolRegistry, build_registry
+from emporio.channels.whatsapp import WhatsAppChannel
 from emporio.clock import FixedClock, SystemClock
 from emporio.domain.calendar import HolidayCalendar
 from emporio.guardrails.attempts import AttemptStore, InMemoryAttemptStore, RedisAttemptStore
 from emporio.guardrails.rate_limit import RedisSlidingWindowLimiter, SlidingWindowLimiter
 from emporio.observability import Telemetry, build_telemetry
 from emporio.observability.tracing_llm import TracingLLM
-from emporio.ports import Clock, RateLimiter, TicketRepository
-from emporio.settings import Settings
+from emporio.ports import Clock, HandoffStore, MessageDeduplicator, RateLimiter, TicketRepository
+from emporio.settings import Settings, secret_value
 
 MISSING_POSTGRES = "state_backend=postgres exige o extra opcional: instale `emporio[postgres]`"
 MISSING_REDIS = "redis_url exige o extra opcional: instale `emporio[redis]`"
@@ -238,3 +241,76 @@ def build_container(
         connection,
         closers,
     )
+
+
+def build_whatsapp_channel(
+    settings: Settings,
+    service: ChatService,
+    closers: list[Callable[[], object]],
+    *,
+    transport: httpx.BaseTransport | None = None,
+    now: Callable[[], float] = time.time,
+) -> WhatsAppChannel:
+    """Monta o canal WhatsApp (chame só com ``settings.whatsapp_enabled``).
+
+    O handoff e a deduplicação vão no Redis se ``redis_url`` existir (valem entre réplicas),
+    senão em SQLite. Os limites e o relógio ficam injetáveis para os testes.
+
+    Args:
+        settings: Configuração, com as variáveis do canal preenchidas.
+        service: Serviço de conversa do agente.
+        closers: Recebe o fechamento de cada recurso aberto.
+        transport: Transporte httpx da Graph API (testes injetam um falso, sem rede).
+        now: Relógio de parede (epoch).
+
+    Returns:
+        O canal pronto.
+    """
+    store: HandoffStore
+    dedup: MessageDeduplicator
+    limiter: RateLimiter
+    per_minute = settings.whatsapp_rate_limit_per_minute
+    if settings.redis_url is None:
+        from emporio.adapters.persistence.sqlite_handoff import SqliteHandoffStore  # noqa: PLC0415
+
+        sqlite_store = SqliteHandoffStore(settings.handoff_path)
+        closers.append(sqlite_store.close)
+        store = dedup = sqlite_store
+        limiter = SlidingWindowLimiter(per_minute, 60.0)
+    else:
+        try:
+            from redis import Redis  # noqa: PLC0415
+
+            from emporio.adapters.persistence.redis_handoff import (  # noqa: PLC0415
+                RedisHandoffStore,
+            )
+        except ImportError as exc:
+            raise RuntimeError(MISSING_REDIS) from exc
+        client: Redis = Redis.from_url(settings.redis_url.get_secret_value())
+        closers.append(client.close)
+        redis_store = RedisHandoffStore(client)
+        store = dedup = redis_store
+        limiter = RedisSlidingWindowLimiter(client, per_minute, 60.0, prefix="emporio:rl:wa:")
+    sender = GraphApiSender(
+        secret_value(settings.whatsapp_access_token),
+        settings.whatsapp_phone_number_id or "",
+        api_version=settings.whatsapp_api_version,
+        transport=transport,
+    )
+    closers.append(sender.close)
+    channel = WhatsAppChannel(
+        service,
+        sender,
+        store,
+        dedup,
+        limiter,
+        pepper=secret_value(settings.whatsapp_hash_pepper),
+        max_message_chars=settings.max_message_chars,
+        handoff_ttl_seconds=settings.whatsapp_handoff_ttl_seconds,
+        workers=settings.whatsapp_workers,
+        queue_size=settings.whatsapp_queue_size,
+        conversation_queue=per_minute,  # no máximo o que o limite por minuto já deixaria passar
+        now=now,
+    )
+    closers.insert(0, channel.close)  # 1º: o pool para antes de fechar store e sender
+    return channel

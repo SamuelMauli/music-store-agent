@@ -5,11 +5,13 @@ from __future__ import annotations
 import json
 import logging
 import secrets
-from collections.abc import AsyncIterator, Iterator
+import time
+from collections.abc import AsyncIterator, Callable, Iterator
 from contextlib import asynccontextmanager
 from dataclasses import asdict
 from typing import Any
 
+import httpx
 from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,14 +20,27 @@ from pydantic import BaseModel, Field
 from sse_starlette import EventSourceResponse, ServerSentEvent
 
 from emporio.agent.service import ChatResult
-from emporio.bootstrap import Container, build_container
+from emporio.bootstrap import Container, build_container, build_whatsapp_channel
+from emporio.domain.errors import (
+    HandoffConflictError,
+    HandoffNotFoundError,
+    MessageDeliveryError,
+    OperatorMismatchError,
+)
 from emporio.guardrails.rate_limit import RateLimitedError
 from emporio.guardrails.session import InvalidSessionError, SessionSigner
-from emporio.interfaces.middleware import REQUEST_ID, ApiGuard, error_response
+from emporio.interfaces.middleware import (
+    OPERATOR_PREFIX,
+    REQUEST_ID,
+    WEBHOOK_PATH,
+    ApiGuard,
+    error_response,
+)
+from emporio.interfaces.whatsapp_api import OPERATOR_NAME, build_router
 from emporio.observability.logging import configure_logging, session_hash
 from emporio.observability.metrics import CONTENT_TYPE, Metrics
 from emporio.production import ensure_production_ready
-from emporio.settings import Settings, load_settings
+from emporio.settings import Settings, load_settings, secret_value
 
 log = logging.getLogger("emporio.api")
 _CHUNK_WORDS = 4
@@ -137,7 +152,30 @@ def _register_errors(app: FastAPI) -> None:
             **{"Retry-After": str(exc.retry_after)},
         )
 
+    @app.exception_handler(HandoffNotFoundError)
+    async def handoff_missing(request: Request, exc: HandoffNotFoundError) -> JSONResponse:
+        return error_response(
+            404, "handoff_not_found", "Conversa fora do atendimento humano.", _request_id(request)
+        )
 
+    @app.exception_handler(HandoffConflictError)
+    async def handoff_conflict(request: Request, exc: HandoffConflictError) -> JSONResponse:
+        return error_response(409, "handoff_conflict", str(exc), _request_id(request))
+
+    @app.exception_handler(OperatorMismatchError)
+    async def operator_mismatch(request: Request, exc: OperatorMismatchError) -> JSONResponse:
+        return error_response(403, "operator_mismatch", str(exc), _request_id(request))
+
+    @app.exception_handler(MessageDeliveryError)
+    async def delivery_failed(request: Request, exc: MessageDeliveryError) -> JSONResponse:
+        log.warning("entrega ao WhatsApp falhou: %s", exc)
+        return error_response(
+            502, "delivery_failed", "Não foi possível entregar a mensagem.", _request_id(request)
+        )
+
+
+_WEBHOOK_MAX_BYTES = 512 * 1024  # a Meta agrupa várias mensagens e eventos por entrega
+_OPERATOR_MAX_BYTES = 32 * 1024  # resposta de até 4096 caracteres, escapada
 _BODY_OVERHEAD_BYTES = 1024  # session_id, aspas e chaves do JSON
 _ESCAPE_FACTOR = 6  # \\uXXXX: pior caso de um caractere escapado no JSON
 
@@ -152,6 +190,8 @@ def _install_middleware(app: FastAPI, config: Settings, metrics: Metrics | None)
         api_keys=[k.get_secret_value() for k in config.api_keys],
         max_body_bytes=_max_body_bytes(config),
         metrics=metrics,
+        operator_keys=config.operator_credentials(),
+        body_limits={WEBHOOK_PATH: _WEBHOOK_MAX_BYTES, OPERATOR_PREFIX: _OPERATOR_MAX_BYTES},
     )
     if config.cors_origins:  # por último = mais externo: responde o preflight sem exigir chave
         app.add_middleware(
@@ -172,28 +212,96 @@ def _register_metrics(app: FastAPI, metrics: Metrics | None) -> None:
         return Response(metrics.render(), media_type=CONTENT_TYPE)
 
 
-def create_app(settings: Settings | None = None, container: Container | None = None) -> FastAPI:
+def _mount_whatsapp(app: FastAPI, config: Settings) -> None:
+    app.include_router(
+        build_router(
+            verify_token=secret_value(config.whatsapp_verify_token),
+            app_secret=secret_value(config.whatsapp_app_secret),
+            phone_number_id=config.whatsapp_phone_number_id or "",
+        )
+    )
+
+
+def _start_whatsapp(
+    app: FastAPI,
+    config: Settings,
+    enabled: bool,
+    transport: httpx.BaseTransport | None,
+    now: Callable[[], float],
+) -> list[Callable[[], object]]:
+    """Monta o canal em ``app.state.whatsapp`` (se ligado) e devolve o que fechar no shutdown."""
+    closers: list[Callable[[], object]] = []
+    if enabled:
+        app.state.whatsapp = build_whatsapp_channel(
+            config, app.state.container.service, closers, transport=transport, now=now
+        )
+    return closers
+
+
+def _close_all(closers: list[Callable[[], object]]) -> None:
+    for closer in closers:
+        closer()
+
+
+def _check_whatsapp(config: Settings) -> bool:
+    """``True`` se o canal está configurado; ``False`` se todas as variáveis faltam.
+
+    Raises:
+        ValueError: Configuração parcial (ligar pela metade seria um canal aberto ou mudo) ou
+            chave de operador igual a uma chave do chat.
+    """
+    missing = config.whatsapp_missing()
+    if len(missing) == 6:
+        return False
+    if missing:
+        raise ValueError("Canal WhatsApp incompleto; faltam: " + ", ".join(missing))
+    chat = {k.get_secret_value() for k in config.api_keys}
+    for name, key in config.operator_credentials():
+        if not key or not OPERATOR_NAME.fullmatch(name):
+            raise ValueError(
+                "EMPORIO_OPERATOR_API_KEYS: use itens 'nome:chave' (nome até 64 caracteres)"
+            )
+        if key in chat:
+            raise ValueError(
+                "EMPORIO_OPERATOR_API_KEYS não pode reutilizar chaves de EMPORIO_API_KEYS"
+            )
+    return True
+
+
+def create_app(
+    settings: Settings | None = None,
+    container: Container | None = None,
+    *,
+    whatsapp_transport: httpx.BaseTransport | None = None,
+    whatsapp_now: Callable[[], float] = time.time,
+) -> FastAPI:
     """Monta a aplicação.
 
     Args:
         settings: Configuração; default lê o ambiente.
         container: Container já pronto (testes); default é criado no startup.
+        whatsapp_transport: Transporte httpx da Graph API (testes; sem rede).
+        whatsapp_now: Relógio de parede do canal WhatsApp (testes avançam a expiração).
 
     Raises:
         ProductionConfigError: ``env=prod`` com configuração insegura (lista todas as faltas).
+        ValueError: Canal WhatsApp configurado pela metade.
     """
     config = settings or load_settings()
     configure_logging(config.log_format, config.log_level)
     ensure_production_ready(config)
     signer = _signer(config)
     metrics = Metrics() if config.metrics_enabled else None
+    whatsapp = _check_whatsapp(config)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.container = container or build_container(config)
+        channel_closers = _start_whatsapp(app, config, whatsapp, whatsapp_transport, whatsapp_now)
         try:
             yield
         finally:  # shutdown gracioso: uvicorn já drenou as requisições em curso
+            _close_all(channel_closers)
             if container is None:
                 app.state.container.close()
 
@@ -214,6 +322,8 @@ def create_app(settings: Settings | None = None, container: Container | None = N
         return JSONResponse({"status": "ready"})
 
     _register_metrics(app, metrics)
+    if whatsapp:
+        _mount_whatsapp(app, config)
 
     @app.post("/v1/chat", response_class=EventSourceResponse)
     def chat(body: ChatRequest, request: Request) -> Response:
