@@ -43,3 +43,7 @@ api:
 # transcricoes reais (EMPORIO_LLM_*) em examples/; plano gratuito: EMPORIO_EVAL_SLEEP=62 make examples
 examples:
 	uv run python -m emporio.evals.examples
+
+# diagnostico do LLM: credencial + chamada real (tool calling e saida estruturada) por papel
+llm-check:
+	uv run python -m emporio.agent.llm.doctor
