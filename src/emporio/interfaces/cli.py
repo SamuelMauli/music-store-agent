@@ -16,7 +16,7 @@ from rich.table import Table
 from emporio.agent.service import ChatResult, ChatService
 from emporio.bootstrap import build_container
 from emporio.guardrails.rate_limit import RateLimitedError
-from emporio.settings import Settings
+from emporio.settings import load_settings
 
 HELP = "Comandos: /debug liga/desliga o painel técnico, /reset zera a conversa, /sair encerra."
 app = typer.Typer(add_completion=False, help="Conversa com o Tom, atendente da Empório da Música.")
@@ -100,7 +100,7 @@ def chat(
     debug: Annotated[bool, typer.Option(help="Começa com o painel /debug ligado.")] = False,
 ) -> None:
     """Abre a conversa no terminal."""
-    settings = Settings()
+    settings = load_settings()
     if reference_date is not None:
         settings = settings.model_copy(
             update={"reference_datetime": _reference(reference_date.date(), settings.timezone)}

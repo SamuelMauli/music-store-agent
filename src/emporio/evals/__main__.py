@@ -22,7 +22,7 @@ from emporio.evals.runner import (
     RunOptions,
     build_report,
 )
-from emporio.settings import Settings
+from emporio.settings import Settings, load_settings
 
 MIN_TOOL_ACCURACY = 0.95
 MIN_GROUNDEDNESS = 0.98
@@ -85,7 +85,7 @@ def _cases(args: argparse.Namespace) -> list[Case]:
 def main(argv: list[str] | None = None) -> int:
     """Roda a avaliação e devolve o código de saída."""
     args = _parse(sys.argv[1:] if argv is None else argv)
-    settings = Settings()
+    settings = load_settings()
     live_like = args.mode != "fake"
     if args.judge and not live_like:
         raise SystemExit("--judge só faz sentido com --mode live ou replay.")

@@ -25,7 +25,7 @@ from emporio.interfaces.middleware import REQUEST_ID, ApiGuard, error_response
 from emporio.observability.logging import configure_logging, session_hash
 from emporio.observability.metrics import CONTENT_TYPE, Metrics
 from emporio.production import ensure_production_ready
-from emporio.settings import Settings
+from emporio.settings import Settings, load_settings
 
 log = logging.getLogger("emporio.api")
 _CHUNK_WORDS = 4
@@ -182,7 +182,7 @@ def create_app(settings: Settings | None = None, container: Container | None = N
     Raises:
         ProductionConfigError: ``env=prod`` com configuração insegura (lista todas as faltas).
     """
-    config = settings or Settings()
+    config = settings or load_settings()
     configure_logging(config.log_format, config.log_level)
     ensure_production_ready(config)
     signer = _signer(config)

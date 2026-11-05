@@ -14,7 +14,7 @@ from emporio.agent.llm.spec import provider_label
 from emporio.agent.llm.types import LLMProvider
 from emporio.bootstrap import build_container
 from emporio.domain.pii import mask_pii
-from emporio.settings import Settings
+from emporio.settings import Settings, load_settings
 
 EXAMPLES_DIR = Path("examples")
 RULE = "-" * 72
@@ -167,7 +167,7 @@ def run_example(
 def main(argv: list[str] | None = None) -> int:
     """Gera os cinco exemplos em ``examples/`` (``EMPORIO_EVAL_SLEEP`` limita o ritmo)."""
     only = set(sys.argv[1:] if argv is None else argv)
-    settings = Settings()
+    settings = load_settings()
     if settings.llm_provider == "fake":
         raise SystemExit("make examples exige um provedor real (EMPORIO_LLM_*).")
     EXAMPLES_DIR.mkdir(exist_ok=True)

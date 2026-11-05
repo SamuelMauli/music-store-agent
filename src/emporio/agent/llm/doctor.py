@@ -20,7 +20,7 @@ from emporio.agent.llm.chat import LangChainLLM
 from emporio.agent.llm.errors import classify
 from emporio.agent.llm.spec import ModelSpec, role_specs
 from emporio.agent.llm.types import LLMProvider, Message
-from emporio.settings import Settings
+from emporio.settings import Settings, load_settings
 
 PING_TOOL: dict[str, Any] = {
     "type": "function",
@@ -169,7 +169,7 @@ def run(settings: Settings, out: TextIO = sys.stdout, builder: Builder = _defaul
 
 def main() -> None:
     """Ponto de entrada de ``python -m emporio.agent.llm.doctor``."""
-    sys.exit(run(Settings()))
+    sys.exit(run(load_settings()))
 
 
 if __name__ == "__main__":

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Literal, Self
 from zoneinfo import ZoneInfo
 
+from dotenv import load_dotenv
 from pydantic import BaseModel, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -183,3 +184,20 @@ class Settings(BaseSettings):
                 tzinfo=ZoneInfo(self.timezone)
             )
         return self
+
+
+def load_settings(env_file: str | Path = ".env") -> Settings:
+    """Configuração dos pontos de entrada (CLI, API, evals, diagnóstico).
+
+    Além das variáveis ``EMPORIO_*``, exporta o ``.env`` para o ambiente do processo, para que
+    as credenciais dos SDKs (``ANTHROPIC_API_KEY``, ``GOOGLE_API_KEY``...) também possam
+    morar nele. Nunca sobrescreve o que já está no ambiente (o orquestrador vence).
+
+    Args:
+        env_file: Arquivo ``.env``; ausente, nada é carregado.
+
+    Returns:
+        A configuração vigente.
+    """
+    load_dotenv(env_file, override=False)
+    return Settings()

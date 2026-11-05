@@ -8,7 +8,7 @@ from emporio.clock import SystemClock
 from emporio.domain.errors import DomainError
 from emporio.ingestion.pipeline import run_pipeline
 from emporio.ingestion.quality import format_quality_report
-from emporio.settings import Settings
+from emporio.settings import load_settings
 
 
 def main() -> int:
@@ -17,7 +17,7 @@ def main() -> int:
     Returns:
         Código de saída do processo (0 em sucesso).
     """
-    settings = Settings()
+    settings = load_settings()
     try:
         result = run_pipeline(settings, SystemClock(settings.timezone))
     except DomainError as exc:

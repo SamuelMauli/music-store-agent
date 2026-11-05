@@ -16,7 +16,7 @@ from emporio.adapters.retrieval.long_context import retrievable
 from emporio.adapters.retrieval.vector_index import InMemoryVectorIndex
 from emporio.domain.policy import PolicySection
 from emporio.ports import Embedder
-from emporio.settings import Settings
+from emporio.settings import load_settings
 
 EVAL_FILE = Path("evals/retrieval.yaml")
 
@@ -65,7 +65,7 @@ def main() -> int:
     """Mede BM25 e híbrido (modelo real) e imprime recall@3 e MRR."""
     import duckdb  # noqa: PLC0415
 
-    settings = Settings()
+    settings = load_settings()
     con = duckdb.connect(str(settings.db_path), read_only=True)
     sections = retrievable(DuckDbPolicySectionRepository(con).all())
     questions = load_questions()
