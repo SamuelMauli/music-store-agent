@@ -117,6 +117,7 @@ class WhatsAppChannel:
         handoff_ttl_seconds: float,
         workers: int = 4,
         queue_size: int = 64,
+        conversation_queue: int = 10,
         now: Callable[[], float] = time.time,
     ) -> None:
         """Cria o canal.
@@ -132,6 +133,8 @@ class WhatsAppChannel:
             handoff_ttl_seconds: Janela sem ação do operador até voltar ao bot.
             workers: Threads dedicadas ao processamento (teto; o pool do servidor fica livre).
             queue_size: Mensagens aceitas além dos workers; acima disso descarta com log.
+            conversation_queue: Teto de mensagens em andamento por conversa (rodando + na fila);
+                o excedente de um número é descartado antes de ocupar a fila global.
             now: Relógio de parede (epoch); injetável nos testes.
         """
         self._service, self._sender, self._store = service, sender, store
@@ -139,6 +142,8 @@ class WhatsAppChannel:
         self._max_chars, self._ttl, self._now = max_message_chars, handoff_ttl_seconds, now
         self._pool = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="wa-worker")
         self._capacity = workers + queue_size
+        self._per_conversation = max(1, conversation_queue)
+        self._closed = False
         self._mutex = threading.Lock()
         self._idle = threading.Condition(self._mutex)
         self._inflight = 0  # aceitas e ainda não terminadas (rodando + na fila)
@@ -154,20 +159,21 @@ class WhatsAppChannel:
     def submit(self, message: InboundMessage) -> bool:
         """Agenda a mensagem num worker sem bloquear quem chama; ``False`` se descartada.
 
-        Mensagens da mesma conversa são processadas em ordem, uma por vez, pelo mesmo worker
-        (as que chegam no meio ficam numa fila da conversa, não prendem thread). Com
-        ``workers + queue_size`` mensagens em andamento, as excedentes são descartadas com log.
+        Antes de ocupar vaga, a mensagem passa por deduplicação e limite por número (quem
+        repete ou abusa não consome a fila dos outros). Mensagens da mesma conversa são
+        processadas em ordem, uma por vez, pelo mesmo worker; as que chegam no meio ficam numa
+        fila da conversa (com teto), sem prender thread. Com ``workers + queue_size`` mensagens
+        em andamento, as excedentes são descartadas com log. Devolve ``True`` também para
+        reentrega ignorada (já tratada), pois não há o que perder.
         """
         conv_id = self.conversation_id(message.sender)
-        with self._mutex:
-            if self._inflight >= self._capacity:
-                log.warning("fila do canal cheia; mensagem descartada contato=%s", conv_id[:12])
-                return False
-            self._inflight += 1
-            if conv_id in self._waiting:
-                self._waiting[conv_id].append(message)  # o worker da conversa pega em seguida
-                return True
-            self._waiting[conv_id] = deque()
+        if (rejected := self._screen(conv_id, message)) is not None:
+            return rejected == "duplicate"
+        slot = self._reserve(conv_id, message)
+        if slot is None:
+            return False
+        if slot == "queued":
+            return True
         try:
             self._pool.submit(self._drain, conv_id, message)
         except RuntimeError:  # pool já encerrado (shutdown)
@@ -176,19 +182,60 @@ class WhatsAppChannel:
             return False
         return True
 
+    def _reserve(self, conv_id: str, message: InboundMessage) -> str | None:
+        """Reserva vaga: ``start`` (livre), ``queued`` (fila da conversa) ou ``None``."""
+        with self._mutex:
+            waiting = self._waiting.get(conv_id)
+            full = waiting is not None and len(waiting) + 1 >= self._per_conversation
+            if self._closed or full or self._inflight >= self._capacity:
+                reason = "encerrando" if self._closed else "fila cheia"
+                log.warning("mensagem descartada (%s) contato=%s", reason, conv_id[:12])
+                return None
+            self._inflight += 1
+            if waiting is None:
+                self._waiting[conv_id] = deque()
+                return "start"
+            waiting.append(message)  # o worker da conversa pega em seguida
+            return "queued"
+
+    def _screen(self, conv_id: str, message: InboundMessage) -> str | None:
+        """Deduplicação e limite por número, ANTES de ocupar vaga; ``None`` = segue.
+
+        Devolve o motivo da rejeição (``duplicate``, ``rate_limited`` ou ``error``).
+        """
+        try:
+            if not self._dedup.first_seen(message.message_id, self._now()):
+                log.info("reentrega ignorada contato=%s", conv_id[:12])
+                return "duplicate"
+            self._limiter.check(conv_id)
+        except RateLimitedError:
+            log.warning("limite por número excedido contato=%s", conv_id[:12])
+            return "rate_limited"
+        except Exception:
+            log.exception("falha ao triar mensagem contato=%s", conv_id[:12])
+            return "error"
+        return None
+
     def _drain(self, conv_id: str, first: InboundMessage) -> None:
         """Roda no worker: processa a mensagem e depois as que se acumularam na conversa."""
         current: InboundMessage | None = first
         while current is not None:
-            self.handle(current)  # nunca levanta
-            current = self._finish(conv_id)
+            try:
+                self.handle(current)
+            except Exception as exc:  # defesa: nada pode deixar a conversa presa
+                log.error("falha inesperada no worker tipo=%s", type(exc).__name__)
+            finally:
+                current = self._finish(conv_id)
 
     def _finish(self, conv_id: str, *, discard: bool = False) -> InboundMessage | None:
         """Dá baixa em uma mensagem; devolve a próxima da conversa ou libera o trinco."""
         with self._mutex:
             self._inflight -= 1
             waiting = self._waiting[conv_id]
-            nxt = None if discard else (waiting.popleft() if waiting else None)
+            if self._closed or discard:  # as que sobraram na fila da conversa não vão rodar
+                self._inflight -= len(waiting)
+                waiting.clear()
+            nxt = waiting.popleft() if waiting else None
             if nxt is None:
                 del self._waiting[conv_id]
             if self._inflight == 0:
@@ -202,20 +249,20 @@ class WhatsAppChannel:
 
     def close(self) -> None:
         """Encerra o pool: o que está rodando termina, o que está na fila é descartado."""
+        with self._mutex:
+            self._closed = True  # novas entradas recusadas; workers param de esvaziar filas
         self._pool.shutdown(wait=True, cancel_futures=True)
+        with self._mutex:  # tarefas canceladas nunca rodaram _finish: zera a contabilidade
+            self._inflight = 0
+            self._waiting.clear()
+            self._idle.notify_all()
 
     # --- cliente -> bot ou fila ---------------------------------------------------------
     def handle(self, message: InboundMessage) -> None:
-        """Trata uma mensagem do cliente; nunca levanta (roda depois do 200 ao webhook)."""
+        """Processa uma mensagem já triada; nunca levanta (roda depois do 200 ao webhook)."""
         conv_id = self.conversation_id(message.sender)
         try:
-            if not self._dedup.first_seen(message.message_id, self._now()):
-                log.info("reentrega ignorada contato=%s", conv_id[:12])
-                return
-            self._limiter.check(conv_id)
             self._route(conv_id, message)
-        except RateLimitedError:
-            log.warning("limite por número excedido contato=%s", conv_id[:12])
         except Exception:
             log.exception("falha ao processar mensagem contato=%s", conv_id[:12])
             self._safe_send(message.sender, FAILURE_REPLY, conv_id)
@@ -321,7 +368,7 @@ class WhatsAppChannel:
             HandoffNotFoundError: Não está em handoff.
             HandoffConflictError: A conversa é de outro operador.
         """
-        result, conversation = self._store.release(conv_id, operator)  # checagem atômica
+        result, conversation = self._store.release(conv_id, operator, self._now())
         if result is ClaimResult.TAKEN:
             raise HandoffConflictError("conversa assumida por outro operador")
         if conversation is None:

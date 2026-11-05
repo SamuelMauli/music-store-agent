@@ -149,10 +149,11 @@ class SqliteHandoffStore:
             return cursor.rowcount == 1
 
     def release(
-        self, conv_id: str, operator: str
+        self, conv_id: str, operator: str, now: float
     ) -> tuple[ClaimResult, HandoffConversation | None]:
         """Devolve ao bot se ``operator`` é o dono (ou não há dono); apaga conversa e histórico."""
         with self._lock:
+            self._drop_expired(now)  # expirada = já voltou ao bot
             row = self._con.execute(_SELECT + " WHERE id = ?", (conv_id,)).fetchone()
             if row is None:
                 return ClaimResult.NOT_FOUND, None

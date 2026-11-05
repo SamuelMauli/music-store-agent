@@ -307,6 +307,7 @@ def build_whatsapp_channel(
         handoff_ttl_seconds=settings.whatsapp_handoff_ttl_seconds,
         workers=settings.whatsapp_workers,
         queue_size=settings.whatsapp_queue_size,
+        conversation_queue=per_minute,  # no máximo o que o limite por minuto já deixaria passar
         now=now,
     )
     closers.insert(0, channel.close)  # 1º: o pool para antes de fechar store e sender

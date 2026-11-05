@@ -163,12 +163,13 @@ class HandoffStore(Protocol):
         ...
 
     def release(
-        self, conv_id: str, operator: str
+        self, conv_id: str, operator: str, now: float
     ) -> tuple[ClaimResult, HandoffConversation | None]:
         """Devolve ao bot, de forma atômica, se ``operator`` pode (dono ou conversa sem dono).
 
         Apaga a conversa e o histórico. Devolve ``(OK, o que existia)``, ``(NOT_FOUND, None)``
-        ou ``(TAKEN, None)`` quando outro operador é o dono.
+        ou ``(TAKEN, None)`` quando outro operador é o dono. Conversa expirada em ``now`` conta
+        como inexistente.
         """
         ...
 

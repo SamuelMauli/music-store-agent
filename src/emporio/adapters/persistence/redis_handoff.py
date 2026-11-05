@@ -170,7 +170,7 @@ class RedisHandoffStore:
         return self._update(conv_id, now, change)
 
     def release(
-        self, conv_id: str, operator: str
+        self, conv_id: str, operator: str, now: float
     ) -> tuple[ClaimResult, HandoffConversation | None]:
         """Devolve ao bot se ``operator`` é o dono (ou não há dono); apaga conversa e histórico."""
         key = self._conv(conv_id)
@@ -183,6 +183,9 @@ class RedisHandoffStore:
                 outcome.append((ClaimResult.NOT_FOUND, None))
                 return
             data: _Data = json.loads(raw)
+            if data["expires_at"] <= now:  # expirada = já voltou ao bot
+                outcome.append((ClaimResult.NOT_FOUND, None))
+                return
             if data["operator"] not in (None, operator):
                 outcome.append((ClaimResult.TAKEN, None))
                 return

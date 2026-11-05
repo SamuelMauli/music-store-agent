@@ -90,10 +90,10 @@ def test_extend_only_for_the_owner(store: Any) -> None:
 
 
 def test_release_removes_everything_and_reports_what_existed(store: Any) -> None:
-    assert store.release("c1", "ana") == (ClaimResult.NOT_FOUND, None)
+    assert store.release("c1", "ana", NOW) == (ClaimResult.NOT_FOUND, None)
     store.enter("c1", "5567999990001", NOW, NOW + TTL)
     store.append("c1", "in", "oi", NOW)
-    result, released = store.release("c1", "ana")  # sem dono: qualquer operador devolve
+    result, released = store.release("c1", "ana", NOW)  # sem dono: qualquer operador devolve
     assert result is ClaimResult.OK
     assert released is not None
     assert released.phone == "5567999990001"
@@ -106,10 +106,10 @@ def test_release_by_non_owner_is_refused_and_keeps_the_conversation(store: Any) 
     store.enter("c1", "5567999990001", NOW, NOW + TTL)
     store.append("c1", "in", "oi", NOW)
     store.claim("c1", "ana", NOW, NOW + TTL)
-    assert store.release("c1", "bia") == (ClaimResult.TAKEN, None)
+    assert store.release("c1", "bia", NOW) == (ClaimResult.TAKEN, None)
     assert store.is_human("c1", NOW)
     assert [m.text for m in store.get("c1", NOW).messages] == ["oi"]
-    assert store.release("c1", "ana")[0] is ClaimResult.OK
+    assert store.release("c1", "ana", NOW)[0] is ClaimResult.OK
 
 
 def test_concurrent_claim_and_release_never_free_a_taken_conversation(store: Any) -> None:
@@ -119,7 +119,7 @@ def test_concurrent_claim_and_release_never_free_a_taken_conversation(store: Any
         store.enter(cid, "5567999990001", NOW, NOW + TTL)
         with ThreadPoolExecutor(max_workers=2) as pool:
             claim = pool.submit(store.claim, cid, "bia", NOW, NOW + TTL)
-            release = pool.submit(store.release, cid, "ana")
+            release = pool.submit(store.release, cid, "ana", NOW)
         claimed, (released, _) = claim.result(), release.result()
         if released is ClaimResult.OK:  # ana apagou antes: bia não pode ter ficado com dono
             assert claimed is ClaimResult.NOT_FOUND
@@ -156,3 +156,8 @@ def test_concurrent_first_seen_has_a_single_winner(store: Any) -> None:
     with ThreadPoolExecutor(8) as pool:
         results = list(pool.map(lambda _: store.first_seen("wamid.X", NOW), range(16)))
     assert results.count(True) == 1
+
+
+def test_release_of_an_expired_conversation_is_not_found(store: Any) -> None:
+    store.enter("c1", "5567999990001", NOW, NOW + TTL)
+    assert store.release("c1", "ana", NOW + TTL + 1) == (ClaimResult.NOT_FOUND, None)
