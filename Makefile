@@ -1,4 +1,4 @@
-.PHONY: setup ingest test lint typecheck check eval-retrieval
+.PHONY: setup ingest chat api test lint typecheck check eval-retrieval
 
 setup:
 	uv sync --frozen
@@ -20,3 +20,9 @@ check: lint typecheck test
 
 eval-retrieval:
 	uv run python -m emporio.evals_retrieval
+
+chat:
+	uv run python -m emporio.interfaces.cli $(ARGS)
+
+api:
+	uv run uvicorn --factory emporio.interfaces.api:create_app --host 127.0.0.1 --port 8000

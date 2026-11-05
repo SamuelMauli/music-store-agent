@@ -117,8 +117,17 @@ class ChatService:
     def stream(
         self, session_id: str, text: str, request_id: str | None = None
     ) -> Iterator[tuple[str, Any]]:
-        """Emite ``("node", nome)`` por nó concluído e, no fim, ``("result", ChatResult)``."""
+        """Emite ``("node", nome)`` por nó concluído e, no fim, ``("result", ChatResult)``.
+
+        O limite de taxa é checado já na chamada (antes do 1º evento), para a API poder
+        responder 429 em vez de abrir um stream.
+        """
         self._admit(session_id, text)
+        return self._stream(session_id, text, request_id)
+
+    def _stream(
+        self, session_id: str, text: str, request_id: str | None
+    ) -> Iterator[tuple[str, Any]]:
         started = time.perf_counter()
         rid = request_id or uuid.uuid4().hex
         for update in self._graph.stream(

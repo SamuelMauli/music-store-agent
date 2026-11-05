@@ -29,6 +29,7 @@ class Settings(BaseSettings):
         reference_datetime: "Agora" simulado; os dados vão de out/2025 a mar/2026.
         checkpoint_path: SQLite com a memória por sessão (checkpointer do LangGraph).
         tickets_path: SQLite dos chamados (somente anexação).
+        rate_limit_per_minute: Mensagens por sessão por minuto (CLI e API).
         use_system_clock: Usa o relógio real em vez de ``reference_datetime``.
         llm_provider: ``openai_compatible`` (Groq, Ollama, OpenAI...) ou ``fake`` (offline).
         llm_base_url: Endpoint OpenAI-compatível.
@@ -54,6 +55,7 @@ class Settings(BaseSettings):
     checkpoint_path: Path = Path("data/checkpoints.sqlite")
     tickets_path: Path = Path("data/tickets.sqlite")
     use_system_clock: bool = False
+    rate_limit_per_minute: int = 20
     llm_provider: Literal["openai_compatible", "fake"] = "openai_compatible"
     llm_base_url: str = "https://api.groq.com/openai/v1"
     llm_api_key: SecretStr | None = None

@@ -28,6 +28,7 @@ from emporio.agent.nodes.deps import Deps
 from emporio.agent.service import ChatService
 from emporio.agent.tools import ToolRegistry, build_registry
 from emporio.clock import FixedClock, SystemClock
+from emporio.guardrails.rate_limit import SlidingWindowLimiter
 from emporio.ports import Clock, TicketRepository
 from emporio.settings import Settings
 
@@ -103,4 +104,9 @@ def build_container(
         closers.append(memory.close)
         checkpointer = SqliteSaver(memory)
     graph = build_graph(Deps(llm, registry, retriever, use_clock), checkpointer)
-    return Container(ChatService(graph), registry, connection, closers)
+    return Container(
+        ChatService(graph, SlidingWindowLimiter(settings.rate_limit_per_minute, 60.0)),
+        registry,
+        connection,
+        closers,
+    )
