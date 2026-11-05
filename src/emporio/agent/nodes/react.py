@@ -94,7 +94,8 @@ def _needs_input(route: RouteDecision, traces: list[dict[str, Any]]) -> bool:
     productless = any(
         i in route.intents for i in ("product_detail", "payment_simulation")
     ) and not (e.product_name or e.referenced_product_ids or traces)
-    return missing_city or productless
+    returning = "return_exchange" in route.intents and "check_return_eligibility" not in called
+    return missing_city or productless or returning
 
 
 def _remember(route: RouteDecision, traces: list[dict[str, Any]]) -> dict[str, Any]:
@@ -133,6 +134,14 @@ class ReactAgent:
             if call.name not in allowed:
                 loop.messages.append(tool_message(call, NOT_ALLOWED))
                 continue
+            if call.name == "open_ticket":
+                prior = next(
+                    (t for t in loop.traces if t["name"] == "open_ticket" and t["status"] == "ok"),
+                    None,
+                )
+                if prior is not None:
+                    loop.messages.append(tool_message(call, prior["payload"]))
+                    continue
             execution = self._deps.registry.call(call.name, call.args, tool_context(state))
             loop.executions.append(execution)
             loop.traces.append(trace_of(execution))

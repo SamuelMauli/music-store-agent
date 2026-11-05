@@ -21,6 +21,7 @@ _NUMBER: Final = re.compile(r"\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d+(?:,\d+)?")
 _SIGNIFICANT: Final = re.compile(
     r"R\$\s?\d[\d.]*(?:,\d+)?|\d+(?:,\d+)?\s?%|\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d+,\d+"
 )
+_PROTOCOL: Final = re.compile(r"EMP[-\u2010-\u2015]\S*\d")
 _EMOJI: Final = re.compile("[\U0001f300-\U0001faff☀-➿⭐⭕️]")
 _CITATION: Final = re.compile(r"§|manual|regra|política|politica", re.I)
 _SHINGLE_WORDS: Final = 8
@@ -73,6 +74,17 @@ def ungrounded_numbers(answer: str, grounded: frozenset[Decimal]) -> list[str]:
         if value is not None and value not in grounded:
             bad.append(m.group().strip())
     return list(dict.fromkeys(bad))
+
+
+def _dashes(text: str) -> str:
+    return re.sub(r"[\u2010-\u2015]", "-", text)
+
+
+def ungrounded_protocols(answer: str, sources: str) -> list[str]:
+    """Protocolos de chamado citados que nenhuma tool devolveu (invenção)."""
+    known = _dashes(sources)
+    found = (_dashes(m.group()) for m in _PROTOCOL.finditer(answer))
+    return list(dict.fromkeys(p for p in found if p not in known))
 
 
 def _plain(text: str) -> str:
@@ -130,6 +142,7 @@ def check_answer(
     grounded: frozenset[Decimal],
     complaint: bool,
     needs_citation: bool,
+    sources: str = "",
 ) -> Verdict:
     """Aplica todas as checagens à resposta do modelo.
 
@@ -152,6 +165,9 @@ def check_answer(
             + ", ".join(bad)
             + ". Use só os valores retornados por elas."
         )
+    if fake := ungrounded_protocols(text, sources):
+        violations.append("protocolo_inventado")
+        details.append("o protocolo " + ", ".join(fake) + " não existe: use open_ticket.")
     if needs_citation and not _CITATION.search(text):
         violations.append("sem_citacao")
         details.append("cite a regra ou a seção (§) do manual que embasa a resposta.")

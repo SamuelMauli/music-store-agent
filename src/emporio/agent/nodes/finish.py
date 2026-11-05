@@ -30,13 +30,20 @@ def make_handoff(deps: Deps) -> Any:
 
     def handoff(state: ChatState) -> dict[str, Any]:
         reason = state.get("handoff_reason") or "encaminhamento solicitado"
-        execution = deps.registry.call(
-            "open_ticket",
-            {"kind": "human", "summary": f"Encaminhado a atendente: {reason}"},
-            tool_context(state),
+        traces = list(state.get("tool_traces", []))
+        existing = next(
+            (t for t in traces if t["name"] == "open_ticket" and t["status"] == "ok"), None
         )
-        payload = json.loads(execution.payload)
-        traces = [*state.get("tool_traces", []), trace_of(execution)]
+        if existing is not None:
+            payload = json.loads(existing["payload"])
+        else:
+            execution = deps.registry.call(
+                "open_ticket",
+                {"kind": "human", "summary": f"Encaminhado a atendente: {reason}"},
+                tool_context(state),
+            )
+            payload = json.loads(execution.payload)
+            traces.append(trace_of(execution))
         data = payload.get("data") or {}
         if payload["status"] == "ok":
             text = HANDOFF_TEXT.format(

@@ -34,6 +34,9 @@ def input_guard(state: ChatState, config: RunnableConfig) -> dict[str, Any]:
     return updates
 
 
+_SHORT_REPLY = 6
+
+
 def _from_pending(
     pending: dict[str, Any], identity: Identity, extra: Entities | None
 ) -> RouteDecision:
@@ -44,6 +47,15 @@ def _from_pending(
     if identity.order_id is not None:
         entities = entities.model_copy(update={"order_id": identity.order_id})
     return RouteDecision(intents=pending["intents"], entities=entities).normalized()
+
+
+def _is_followup(pending: dict[str, Any], route: RouteDecision, text: str) -> bool:
+    """Resposta curta a uma pergunta pendente, mesmo que o modelo a tenha classificado à parte."""
+    if route.low_confidence or not route.intents:
+        return True
+    asked = {str(i) for i in pending.get("intents", [])}
+    given = {i.value for i in route.intents}
+    return len(text.split()) <= _SHORT_REPLY and not asked & given
 
 
 def make_router(deps: Deps) -> Any:
@@ -65,7 +77,7 @@ def make_router(deps: Deps) -> Any:
         except LLMError:
             return failure(state, "falha no roteador")
         updates: dict[str, Any] = {"usage": add_usage(state, usage)}
-        if pending and (route.low_confidence or not route.intents):
+        if pending and _is_followup(pending, route, state["user_text"]):
             route = _from_pending(pending, identity, route.entities)
         else:
             updates["pending"] = {}

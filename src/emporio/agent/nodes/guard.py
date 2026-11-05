@@ -41,9 +41,11 @@ def make_output_guard(deps: Deps) -> Any:
 
     def output_guard(state: ChatState) -> dict[str, Any]:
         traces = state.get("tool_traces", [])
+        pool = _sources(deps, state)
         verdict = check_answer(
             state.get("answer", ""),
-            grounded=grounded_values(_sources(deps, state)),
+            grounded=grounded_values(pool),
+            sources=" ".join(pool),
             complaint=Intent.COMPLAINT in route_of(state).intents,
             needs_citation=any(t["name"] in CITING_TOOLS and t["status"] == "ok" for t in traces),
         )
@@ -54,7 +56,7 @@ def make_output_guard(deps: Deps) -> Any:
         if state.get("regenerations", 0) < MAX_REGENERATIONS:
             return {
                 "answer": "",
-                "tool_traces": [],
+                "tool_traces": [t for t in traces if t["name"] == "open_ticket"],
                 "regenerations": state.get("regenerations", 0) + 1,
                 "feedback": " ".join(verdict.details),
             }

@@ -39,6 +39,9 @@ Interpretação desta mensagem (roteador): {{ route_intents | join(", ") or "con
     asteriscos ou crases. Use hífen para listas.
 12. Em listas de produtos, diga o total encontrado (total_matches) e que está mostrando
     só alguns. Não cumprimente de novo: a apresentação do 1º turno já é feita pelo sistema.
+13. Em devolução ou política, cite sempre a seção de origem no texto, no formato §N.N
+    (ex.: "conforme §4.1"), usando as seções de <politicas> ou o campo sources da tool.
+    Abra no máximo um chamado por assunto: não chame open_ticket de novo no mesmo turno.
 {% if feedback %}
 # Correção obrigatória
 Sua resposta anterior foi recusada: {{ feedback }}

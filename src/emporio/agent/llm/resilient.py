@@ -77,7 +77,7 @@ class ResilientLLM:
         primary: LLMProvider,
         fallback: LLMProvider | None = None,
         *,
-        attempts: int = 4,
+        attempts: int = 5,
         breaker: CircuitBreaker | None = None,
         wait: wait_base | None = None,
     ) -> None:
@@ -94,7 +94,7 @@ class ResilientLLM:
         self._fallback = fallback
         self._attempts = attempts
         self._breaker = breaker or CircuitBreaker()
-        self._wait = wait or wait_exponential(multiplier=1.5, max=10.0)
+        self._wait = wait or wait_exponential(multiplier=2.0, max=15.0)
 
     def complete(
         self,
