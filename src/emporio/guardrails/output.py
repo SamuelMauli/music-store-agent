@@ -11,6 +11,7 @@ from typing import Final
 
 from emporio.agent.prompts import PROMPT_DIR
 from emporio.domain.pii import find_pii
+from emporio.domain.text import normalize_text
 from emporio.policies.store import CONTACTS
 
 SAFE_ANSWER: Final = (
@@ -74,6 +75,50 @@ def ungrounded_numbers(answer: str, grounded: frozenset[Decimal]) -> list[str]:
         if value is not None and value not in grounded:
             bad.append(m.group().strip())
     return list(dict.fromkeys(bad))
+
+
+_PERCENT: Final = re.compile(r"\d+(?:,\d+)?\s?%")
+_SENTENCE: Final = re.compile(r"[^.!?\n]+")
+_DENIAL: Final = re.compile(
+    r"\b(encerrad\w*|encerrou|inativ\w*|expirou|acabou|terminou|finalizad\w*|"
+    r"nao (esta|estao|ta|ha|existe|vale|valem|tem)\b)"
+)
+_AFFIRMATION: Final = re.compile(
+    r"\b(continua|segue|ainda (esta|vale|tem)|estao? (valendo|ativ\w*|vigente|com)|vale ate|"
+    r"voce (paga|leva|ganha)|de desconto)\b"
+)
+_FALSE_END: Final = re.compile(r"nao (foi |esta )?(encerrad|inativ|finalizad)\w*")
+_NEGATED: Final = re.compile(r"nao (esta|estao|ta|vale|valem|tem|ha|existe)( mais)?( \w+)?")
+
+
+def _denies(sentence: str) -> bool:
+    """A frase (normalizada) nega a vigência: encerramento sem nenhuma afirmação de que vale."""
+    if not _DENIAL.search(sentence) or _FALSE_END.search(sentence):
+        return False
+    return not _AFFIRMATION.search(_NEGATED.sub(" ", sentence))
+
+
+def denied_echoes(answer: str, customer_text: str) -> frozenset[str]:
+    """Percentuais que o cliente citou e que a resposta só repete para NEGAR (promoção encerrada).
+
+    Conservador: o percentual precisa estar literalmente na mensagem do cliente e TODA frase
+    da resposta que o contém precisa trazer uma negação/encerramento e nenhuma afirmação de
+    vigência. Só vale para ``%`` (nunca para ``R$``) e só quando o chamador sabe, por uma
+    tool, que a promoção está encerrada.
+    """
+    asked = {v for m in _PERCENT.finditer(customer_text) if (v := _value(m.group())) is not None}
+    allowed: list[str] = []
+    for token in {m.group().strip() for m in _PERCENT.finditer(answer)}:
+        if _value(token) not in asked:
+            continue
+        sentences = [
+            normalize_text(s)
+            for s in _SENTENCE.findall(answer)
+            if any(_value(m.group()) == _value(token) for m in _PERCENT.finditer(s))
+        ]
+        if all(_denies(s) for s in sentences):
+            allowed.append(token)
+    return frozenset(allowed)
 
 
 def _dashes(text: str) -> str:
@@ -143,6 +188,8 @@ def check_answer(
     complaint: bool,
     needs_citation: bool,
     sources: str = "",
+    customer_text: str = "",
+    promotion_ended: bool = False,
 ) -> Verdict:
     """Aplica todas as checagens à resposta do modelo.
 
@@ -151,6 +198,9 @@ def check_answer(
         grounded: Valores permitidos (ver :func:`grounded_values`).
         complaint: A conversa é reclamação (sem emoji).
         needs_citation: Uma tool de regra respondeu com sucesso, então a resposta deve citar.
+        customer_text: Mensagem do cliente no turno.
+        promotion_ended: Uma tool confirmou que a promoção do produto encerrou; só então um
+            percentual citado pelo cliente pode ser repetido, e apenas para negá-lo.
 
     Returns:
         Veredito com o texto já com o limite de emoji aplicado.
@@ -158,7 +208,11 @@ def check_answer(
     text = limit_emoji(_plain(answer), 0 if complaint else 1)
     violations: list[str] = []
     details: list[str] = []
-    if bad := ungrounded_numbers(text, grounded):
+    bad = ungrounded_numbers(text, grounded)
+    if promotion_ended and bad:
+        allowed = denied_echoes(text, customer_text)
+        bad = [b for b in bad if b not in allowed]
+    if bad:
         violations.append("numero_sem_fonte")
         details.append(
             "estes valores não vieram das ferramentas: "

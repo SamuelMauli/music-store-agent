@@ -8,7 +8,11 @@ from typing import Any, Final
 
 from emporio.agent.intents import Intent
 from emporio.agent.nodes.deps import Deps, route_of
-from emporio.agent.nodes.facts import with_return_verdict
+from emporio.agent.nodes.facts import (
+    ended_promotions,
+    with_promotion_status,
+    with_return_verdict,
+)
 from emporio.agent.nodes.react import policy_context
 from emporio.agent.state import ChatState
 from emporio.guardrails.output import (
@@ -49,9 +53,12 @@ def make_output_guard(deps: Deps) -> Any:
             sources=" ".join(pool),
             complaint=Intent.COMPLAINT in route_of(state).intents,
             needs_citation=any(t["name"] in CITING_TOOLS and t["status"] == "ok" for t in traces),
+            customer_text=state.get("user_text", ""),
+            promotion_ended=bool(ended_promotions(traces)),
         )
         if verdict.ok:
-            return {"answer": with_return_verdict(verdict.text, traces)}
+            answer = with_promotion_status(with_return_verdict(verdict.text, traces), traces)
+            return {"answer": answer}
         codes = ",".join(verdict.violations)
         log.warning("resposta reprovada: %s (regeneracao=%s)", codes, state.get("regenerations", 0))
         if state.get("regenerations", 0) < MAX_REGENERATIONS:

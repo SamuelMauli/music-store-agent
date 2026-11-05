@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from pydantic import BaseModel, Field
 
 from emporio.agent.tools.formatting import AVAILABILITY_LABEL, brl, percent
@@ -43,14 +45,25 @@ class ProductDetail(ProductCard):
     category: str
     stock_quantity: int
     promotion: str | None = None
+    ended_promotions: list[str] = Field(
+        default_factory=list,
+        description="Campanhas deste produto que já encerraram (sem percentual de propósito).",
+    )
+    promotion_note: str | None = None
     pix_price: str | None = None
     pix_note: str | None = None
     max_installments: str
     specs: dict[str, str] = Field(default_factory=dict)
 
     @classmethod
-    def from_entry(cls, entry: CatalogEntry) -> ProductDetail:
-        """Constrói o detalhe, com preço PIX e parcelas calculados pelo Policy-as-Code."""
+    def from_entry(cls, entry: CatalogEntry, ended: Sequence[str] = ()) -> ProductDetail:
+        """Constrói o detalhe, com preço PIX e parcelas calculados pelo Policy-as-Code.
+
+        Args:
+            entry: Linha do catálogo.
+            ended: Campanhas encerradas do produto (só relevantes se não há promoção ativa).
+        """
+        stale = [] if entry.promo_name else list(dict.fromkeys(ended))
         card = ProductCard.from_entry(entry)
         best = installment_options(entry.effective_price)[-1]
         return cls(
@@ -58,6 +71,13 @@ class ProductDetail(ProductCard):
             category=entry.category,
             stock_quantity=entry.product.stock_quantity,
             promotion=entry.promo_name,
+            ended_promotions=stale,
+            promotion_note=(
+                "Promoção encerrada, não vale mais: " + ", ".join(stale) + ". Diga isso ao "
+                "cliente e não cite o percentual dela; o preço vigente é o de price."
+                if stale
+                else None
+            ),
             pix_price=brl(entry.pix_price) if entry.pix_price else None,
             pix_note=None if entry.pix_price else "PIX não acumula com promoção (§6.2)",
             max_installments=f"até {best.count}x de {brl(best.amount)} sem juros",

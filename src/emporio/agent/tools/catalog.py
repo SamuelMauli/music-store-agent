@@ -32,7 +32,7 @@ from emporio.domain.specifications import (
 )
 from emporio.domain.text import normalize_text
 from emporio.domain.value_objects import Money
-from emporio.ports import ProductRepository
+from emporio.ports import ProductRepository, PromotionRepository
 
 MAX_RESULTS = 5
 MAX_SIMILAR = 3
@@ -147,18 +147,37 @@ class GetProduct(Tool[GetProductInput, ProductDetail]):
     )
     input_model = GetProductInput
 
-    def __init__(self, products: ProductRepository) -> None:
+    def __init__(
+        self, products: ProductRepository, promotions: PromotionRepository | None = None
+    ) -> None:
         self._products = products
+        self._promotions = promotions
+
+    def _detail(self, entry: CatalogEntry) -> ToolResult[ProductDetail]:
+        ended = (
+            [
+                p.description
+                for p in self._promotions.for_product(entry.product.product_id)
+                if not p.is_active
+            ]
+            if self._promotions is not None
+            else []
+        )
+        return Ok(
+            ProductDetail.from_entry(entry, ended),
+            sources=(f"product:{entry.product.product_id}",),
+            refs=(ref_of(entry),),
+        )
 
     def run(self, args: GetProductInput, ctx: ToolContext) -> ToolResult[ProductDetail]:
         """Resolve por ID ou por nome com fuzzy match."""
         text = args.name_or_id.strip()
         if text.isdigit():
             entry = self._products.get(int(text))
-            return _detail(entry) if entry else NotFound("Não há produto com esse código.")
+            return self._detail(entry) if entry else NotFound("Não há produto com esse código.")
         match self._products.resolve_name(text):
             case Found(entry=entry):
-                return _detail(entry)
+                return self._detail(entry)
             case NameAmbiguous(options=options):
                 return Ambiguous(
                     "Qual destes modelos o cliente quis?",
@@ -178,14 +197,6 @@ class GetProduct(Tool[GetProductInput, ProductDetail]):
             if any(t in normalize_text(e.product.name) for t in tokens)
         ]
         return tuple(ref_of(e) for e in close[:MAX_SIMILAR])
-
-
-def _detail(entry: CatalogEntry) -> ToolResult[ProductDetail]:
-    return Ok(
-        ProductDetail.from_entry(entry),
-        sources=(f"product:{entry.product.product_id}",),
-        refs=(ref_of(entry),),
-    )
 
 
 class CompareProductsInput(BaseModel):

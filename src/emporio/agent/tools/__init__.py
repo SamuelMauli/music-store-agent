@@ -58,7 +58,7 @@ def build_registry(
     """
     tools: list[Tool[Any, Any]] = [
         SearchProducts(products),
-        GetProduct(products),
+        GetProduct(products, promotions),
         CompareProducts(products),
         FindAlternatives(products),
         ListActivePromotions(promotions, products),

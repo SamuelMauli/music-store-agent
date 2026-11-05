@@ -156,3 +156,35 @@ def test_prompt_resolves_pronoun_and_checks_product_for_promotion() -> None:
     assert "nunca pergunte" in text
     assert "qual produto" in text
     assert "não responda só pela" in text
+
+
+MODEL_PARAPHRASE = (
+    "Oi, Letícia! Seu pedido 7 pode ser devolvido, sim, pela regra §4.1. Você está dentro do "
+    "prazo e restam 3 dias."
+)
+
+
+def test_equivalent_model_phrasing_is_not_duplicated() -> None:
+    """Regressão: "pode ser devolvido" + "restam 3 dias" virava frase determinística + resposta."""
+    assert with_return_verdict(MODEL_PARAPHRASE, [_trace(ELIGIBLE)]) == MODEL_PARAPHRASE
+
+
+def test_verdict_without_window_only_appends_the_window() -> None:
+    said = "Oi, Letícia! Seu pedido 7 pode ser devolvido, sim (§4.1)."
+    out = with_return_verdict(said, [_trace(ELIGIBLE)])
+    assert out.startswith(said)
+    assert out.count("dá para devolver") == 0
+    assert out.count("dia 4 de 7") == 1
+    assert "Prazo até 24/02/2026" in out
+
+
+@pytest.mark.parametrize("negated", ["Não pode ser devolvido.", "Não dá para devolver."])
+def test_negated_phrase_is_not_taken_as_eligible(negated: str) -> None:
+    out = with_return_verdict(negated, [_trace(ELIGIBLE)])
+    assert out.startswith("Pela regra §4.1, dá para devolver.")
+
+
+def test_ineligible_equivalents_are_recognised() -> None:
+    data = {"eligible": False, "rule": "§4.1", "window": None, "deadline": None}
+    said = "Esse pedido não pode ser devolvido (§4.1)."
+    assert with_return_verdict(said, [_trace(data)]) == said

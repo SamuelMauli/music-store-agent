@@ -1,4 +1,4 @@
-"""Fatos de política que vêm da ferramenta e não podem depender da paráfrase do modelo."""
+"""Fatos que vêm da ferramenta e não podem depender da paráfrase do modelo."""
 
 from __future__ import annotations
 
@@ -9,16 +9,23 @@ from typing import Any, Final
 from emporio.domain.text import normalize_text
 
 _YES: Final = re.compile(
-    r"\b(da para devolver|pode devolver|elegivel|e possivel devolver|tem direito)\b"
+    r"\b(da (sim )?para devolver|pode (sim )?devolver|pode (sim )?ser devolvid\w*|elegivel|"
+    r"e possivel devolver|tem direito|dentro do prazo)\b"
 )
 _NO: Final = re.compile(
-    r"\b(nao e elegivel|nao da para devolver|nao pode devolver|fora do prazo)\b"
+    r"\b(nao (e|eh) elegivel|nao da para devolver|nao pode devolver|nao pode ser devolvid\w*|"
+    r"nao e possivel devolver|fora do prazo)\b"
+)
+_WINDOW: Final = re.compile(r"dia (\d+) de (\d+)")
+_ENDED: Final = re.compile(
+    r"\b(encerrad\w*|encerrou|nao esta (mais )?(valendo|vigente|ativa|em promocao)|"
+    r"nao (ha|existe|tem) (mais )?(a )?promocao|nao vale mais|acabou|terminou|finalizad\w*)\b"
 )
 
 
-def _last_return(traces: list[dict[str, Any]]) -> dict[str, Any] | None:
+def _last_ok(traces: list[dict[str, Any]], name: str) -> dict[str, Any] | None:
     for trace in reversed(traces):
-        if trace["name"] == "check_return_eligibility" and trace["status"] == "ok":
+        if trace["name"] == name and trace["status"] == "ok":
             data = json.loads(trace["payload"]).get("data")
             return data if isinstance(data, dict) else None
     return None
@@ -35,18 +42,59 @@ def _statement(data: dict[str, Any]) -> str:
     return " ".join(parts)
 
 
+def _said_window(data: dict[str, Any], text: str) -> bool:
+    """A janela vem literal ("dia 4 de 7") ou em forma equivalente ("restam 3 dias")."""
+    window = str(data.get("window") or "")
+    if not window or normalize_text(window) in text:
+        return True
+    if (m := _WINDOW.search(normalize_text(window))) is None:
+        return False
+    left = int(m.group(2)) - int(m.group(1))
+    return bool(
+        re.search(rf"\b(restam|resta|faltam|falta) {left} dias?\b|\b{left} dias? restantes?", text)
+    )
+
+
 def with_return_verdict(answer: str, traces: list[dict[str, Any]]) -> str:
     """Garante veredito e janela (``dia X de Y``) na resposta, copiados do resultado da tool.
 
-    Se o modelo já afirmou o veredito e citou a janela, a resposta segue intacta; senão, a
-    frase determinística vem na frente.
+    Reconhece formulações equivalentes do modelo ("pode ser devolvido", "restam 3 dias") para
+    não duplicar a informação. Se o veredito faltar, a frase determinística vem na frente; se
+    só a janela faltar, só ela é acrescentada ao fim.
     """
-    data = _last_return(traces)
+    data = _last_ok(traces, "check_return_eligibility")
     if data is None:
         return answer
     text = normalize_text(answer)
-    said_verdict = bool((_YES if data["eligible"] else _NO).search(text))
-    said_window = not data.get("window") or normalize_text(str(data["window"])) in text
-    if said_verdict and said_window:
+    if data["eligible"]:
+        said_verdict = bool(_YES.search(text)) and not _NO.search(text)
+    else:
+        said_verdict = bool(_NO.search(text))
+    if not said_verdict:
+        return f"{_statement(data)} {answer}".strip()
+    if _said_window(data, text):
         return answer
-    return f"{_statement(data)} {answer}".strip()
+    extra = [f"Você está no {data['window']}."]
+    if data.get("deadline") and str(data["deadline"]) not in answer:
+        extra.append(f"Prazo até {data['deadline']}.")
+    return f"{answer} {' '.join(extra)}".strip()
+
+
+def ended_promotions(traces: list[dict[str, Any]]) -> list[str]:
+    """Campanhas encerradas do produto consultado (``get_product``) sem promoção ativa."""
+    data = _last_ok(traces, "get_product")
+    if data is None or data.get("promotion"):
+        return []
+    return [str(n) for n in data.get("ended_promotions") or []]
+
+
+def with_promotion_status(answer: str, traces: list[dict[str, Any]]) -> str:
+    """Se a tool indica promoção encerrada, a resposta diz isso explicitamente."""
+    ended = ended_promotions(traces)
+    text = re.sub(r"nao (foi |esta )?encerrad\w*", " ", normalize_text(answer))
+    if not ended or _ENDED.search(text):
+        return answer
+    names = " e ".join(ended)
+    return (
+        f"{answer} A promoção {names} deste produto foi encerrada e não está mais valendo.".strip()
+    )
