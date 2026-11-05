@@ -10,12 +10,12 @@ from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
-from urllib.parse import urlparse
 
 import duckdb
 
 from emporio.adapters.persistence import DuckDbPolicySectionRepository
 from emporio.agent.llm import factory
+from emporio.agent.llm.spec import provider_label
 from emporio.agent.llm.types import LLMError, LLMProvider, Usage
 from emporio.agent.prompts import prompt_hash
 from emporio.bootstrap import build_container
@@ -303,7 +303,7 @@ def build_report(
         "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "mode": options.mode,
         "prompt_hash": prompt_hash(),
-        "provider": "fake" if options.mode == "fake" else urlparse(settings.llm_base_url).hostname,
+        "provider": "fake" if options.mode == "fake" else provider_label(settings),
         "models": {"small": settings.llm_model_small, "medium": settings.llm_model_medium},
         "throttle_seconds": options.sleep,
         "wall_seconds": round(wall_seconds, 1),

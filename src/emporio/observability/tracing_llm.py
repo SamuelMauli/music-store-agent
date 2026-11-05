@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from typing import Any
-from urllib.parse import urlparse
 
 from pydantic import BaseModel
 
+from emporio.agent.llm.spec import provider_label
 from emporio.agent.llm.types import (
     LLMError,
     LLMProvider,
@@ -40,16 +40,14 @@ class TracingLLM:
         s = self._settings
         return s.llm_model_small if tier == "small" else s.llm_model_medium
 
-    def _provider(self) -> str:
-        if self._settings.llm_provider == "fake":
-            return "fake"
-        return urlparse(self._settings.llm_base_url).hostname or "openai_compatible"
+    def _provider(self, tier: Tier) -> str:
+        return provider_label(self._settings, tier)
 
     def _span(self, tier: Tier, temperature: float) -> Any:
         model = self._model(tier)
         attributes: dict[str, AttributeValue] = {
             "gen_ai.operation.name": "chat",
-            "gen_ai.provider.name": self._provider(),
+            "gen_ai.provider.name": self._provider(tier),
             "gen_ai.request.model": model,
             "gen_ai.request.temperature": temperature,
             "emporio.tier": tier,

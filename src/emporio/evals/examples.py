@@ -9,8 +9,8 @@ import uuid
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
-from urllib.parse import urlparse
 
+from emporio.agent.llm.spec import provider_label
 from emporio.agent.llm.types import LLMProvider
 from emporio.bootstrap import build_container
 from emporio.domain.pii import mask_pii
@@ -106,7 +106,7 @@ def _stamp(settings: Settings, example: Example) -> datetime:
 def render(example: Example, settings: Settings, rows: list[Row]) -> str:
     """Monta o texto da transcrição (cabeçalho, turnos e rodapé de métricas)."""
     when = _stamp(settings, example)
-    provider = urlparse(settings.llm_base_url).hostname or settings.llm_provider
+    provider = provider_label(settings)
     lines = [
         example.title,
         f"Data de referência: {when:%d/%m/%Y %H:%M} ({when.tzinfo})",

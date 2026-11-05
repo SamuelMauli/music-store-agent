@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import get_args
+from urllib.parse import urlparse
 
 from emporio.settings import LLMProviderName, Settings
 
@@ -53,6 +54,38 @@ def parse_spec(raw: str, default_provider: str) -> ModelSpec:
     if not model:
         raise ValueError(f"spec de modelo sem nome de modelo: {raw!r}")
     return ModelSpec(provider, model)
+
+
+def provider_label(settings: Settings, tier: str | None = None) -> str:
+    """Nome do provedor para telemetria/relatórios, derivado da spec (não do ``base_url``).
+
+    ``openai_compatible`` ganha o host do endpoint (ex.: ``openai_compatible(api.groq.com)``),
+    pois o nome sozinho não diz quem atendeu. Sem ``tier``, junta os provedores distintos de
+    ``small`` e ``medium`` com ``+`` (ex.: ``groq+anthropic``).
+
+    Args:
+        settings: Configuração vigente.
+        tier: ``small`` ou ``medium``; ``None`` descreve os dois.
+
+    Returns:
+        Rótulo legível do(s) provedor(es).
+    """
+    if settings.llm_provider == "fake":
+        return "fake"
+    raws = {
+        "small": settings.llm_model_small,
+        "medium": settings.llm_model_medium,
+    }
+    chosen = [raws[tier]] if tier in raws else list(raws.values())
+    labels: list[str] = []
+    for raw in chosen:
+        name = parse_spec(raw, settings.llm_provider).provider
+        if name == "openai_compatible":
+            host = urlparse(settings.llm_base_url).hostname
+            name = f"{name}({host})" if host else name
+        if name not in labels:
+            labels.append(name)
+    return "+".join(labels)
 
 
 def role_specs(settings: Settings) -> dict[str, ModelSpec]:

@@ -14,7 +14,13 @@ from pydantic import SecretStr
 
 from emporio.agent.llm import providers
 from emporio.agent.llm.providers import LLMConfigError, MissingExtraError
-from emporio.agent.llm.spec import ModelSpec, fallback_specs, parse_spec, role_specs
+from emporio.agent.llm.spec import (
+    ModelSpec,
+    fallback_specs,
+    parse_spec,
+    provider_label,
+    role_specs,
+)
 from emporio.settings import LLMProviderName, Settings
 
 SDK_ENVS = (
@@ -339,3 +345,28 @@ def test_missing_extra_on_import_is_a_clear_error(
     monkeypatch.setattr(providers.importlib, "import_module", fake_import)
     with pytest.raises(MissingExtraError, match=rf"emporio\[{extra}\]"):
         _build(spec)
+
+
+@pytest.mark.parametrize(
+    ("overrides", "tier", "expected"),
+    [
+        ({"llm_provider": "fake"}, None, "fake"),
+        (
+            {"llm_model_small": "google:gemini-3.1-flash-lite", "llm_model_medium": "google:g"},
+            None,
+            "google",
+        ),
+        ({"llm_model_small": "groq:a", "llm_model_medium": "anthropic:b"}, None, "groq+anthropic"),
+        ({"llm_model_small": "groq:a", "llm_model_medium": "anthropic:b"}, "medium", "anthropic"),
+        (
+            {"llm_model_small": "openai/gpt-oss-20b", "llm_model_medium": "openai/gpt-oss-120b"},
+            "small",
+            "openai_compatible(api.groq.com)",
+        ),
+    ],
+)
+def test_provider_label_comes_from_spec_not_base_url(
+    overrides: dict[str, Any], tier: str | None, expected: str
+) -> None:
+    """Regressão: o relatório dizia ``api.groq.com`` numa rodada 100% Gemini."""
+    assert provider_label(_settings(**overrides), tier) == expected
