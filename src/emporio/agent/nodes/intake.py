@@ -47,7 +47,7 @@ def make_input_guard(deps: Deps) -> Any:
             )
             updates.update(answer=REFUSAL, blocked=True)
         elif verdict.degraded:
-            log.debug("guarda de injecao degradada: so heuristica nesta mensagem")
+            log.warning("guarda de injecao degradada: so heuristica nesta mensagem")
         return updates
 
     return input_guard

@@ -75,10 +75,13 @@ class LogisticModel:
         weights = np.asarray(data["weights"], dtype=np.float64)
         if weights.ndim != 1 or weights.shape[0] != int(data["dim"]):
             raise ValueError("pesos não batem com 'dim'")
+        bias = float(data["bias"])
+        if not (np.all(np.isfinite(weights)) and np.isfinite(bias)):
+            raise ValueError("pesos ou viés não finitos (NaN/inf)")
         threshold = float(data["threshold"])
         if not 0.0 < threshold < 1.0:
             raise ValueError("limiar fora de (0, 1)")
-        return cls(weights, float(data["bias"]), threshold, str(data["embedding_model"]))
+        return cls(weights, bias, threshold, str(data["embedding_model"]))
 
     @classmethod
     def load(cls, path: Path = MODEL_PATH) -> LogisticModel:

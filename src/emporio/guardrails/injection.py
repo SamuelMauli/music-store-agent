@@ -4,7 +4,8 @@ Política de combinação (OU, com curto-circuito):
 
 1. A heurística (padrões PT/EN sobre texto e variantes desofuscadas) casou → bloqueia. É
    assinatura explícita de ataque e não custa nada; o classificador nem roda.
-2. Senão, o classificador pontua o texto e as variantes desofuscadas; a maior probabilidade
+2. Senão, o classificador pontua o texto, a troca de homóglifos e o base64 decodificado (leet
+   e hífen ficam só com a heurística: reescrevem SKU, rastreio e UUID); a maior probabilidade
    ``>= limiar`` → bloqueia. O limiar vem do treino (``make train-guard``), escolhido por
    validação cruzada para maximizar o recall com FPR baixo em clientes legítimos.
 3. Classificador indisponível (modelo de embedding não carregou, pesos inválidos) → fica só a
@@ -26,7 +27,7 @@ from pathlib import Path
 import numpy as np
 
 from emporio.guardrails.classifier import MODEL_PATH, LogisticModel
-from emporio.guardrails.input import deobfuscated_variants, looks_like_injection
+from emporio.guardrails.input import classifier_variants, looks_like_injection
 from emporio.ports import Embedder
 
 log = logging.getLogger("emporio.guard")
@@ -90,13 +91,16 @@ class EmbeddingInjectionClassifier:
             return None
         try:
             vectors = self._embedder.embed(texts)
-            return float(np.max(self._model.proba(vectors)))
+            score = float(np.max(self._model.proba(vectors)))
+            if not np.isfinite(score):
+                raise FloatingPointError("score nao finito")
+            return score
         except Exception as exc:  # qualquer falha do modelo cai para a heurística
             self._down_until = self._now() + self._retry_after
+            # Só o tipo: a mensagem da exceção pode carregar texto do cliente (CPF, e-mail).
             log.warning(
-                "classificador de injecao indisponivel (%s: %s); so heuristica por %.0fs",
+                "classificador de injecao indisponivel (%s); so heuristica por %.0fs",
                 type(exc).__name__,
-                str(exc)[:120],
                 self._retry_after,
             )
             return None
@@ -128,7 +132,7 @@ class LayeredInjectionGuard:
             return InjectionVerdict(True, "heuristic", None, False, self._ms(start))
         if self._classifier is None:
             return InjectionVerdict(False, "none", None, self._degraded, self._ms(start))
-        score = self._classifier.score([text, *deobfuscated_variants(text)])
+        score = self._classifier.score([text, *classifier_variants(text)])
         if score is None:
             return InjectionVerdict(False, "none", None, True, self._ms(start))
         blocked = score >= self._classifier.threshold
@@ -154,7 +158,9 @@ def build_injection_guard(
     try:
         model = LogisticModel.load(path)
     except (OSError, ValueError, KeyError, TypeError) as exc:
-        log.warning("pesos do classificador de injecao invalidos (%s); so heuristica", exc)
+        log.warning(
+            "pesos do classificador de injecao invalidos (%s); so heuristica", type(exc).__name__
+        )
         return LayeredInjectionGuard(degraded=True)
     return LayeredInjectionGuard(
         EmbeddingInjectionClassifier(embedder_for(model.embedding_model), model)

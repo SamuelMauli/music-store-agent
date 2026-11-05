@@ -42,10 +42,22 @@ _HOMOGLYPHS: Final = str.maketrans(
     "аеорсхуіїјѕԁһԛԝАВЕКМНОРСТХІЈЅΑΒΕΖΗΙΚΜΝΟΡΤΥΧοιⅠⅰ",
     "aeopcxyiijsdhqwABEKMHOPCTXIJSABEZHIKMNOPTYXoiIi",
 )
-_LEETABLE: Final = re.compile(r"\b(?=\S*[a-z])(?=\S*[013457@$!|])\S+")
+# Leet só em palavra "de letra": >= 2 caracteres leet e sem formato de identificador (SKU,
+# modelo, rastreio, UUID, e-mail, chave pix), para "GF-3D" ou "QB123456789BR" não virarem texto.
+_LEETABLE: Final = re.compile(r"(?<![\w@.\-])(?=\S*[a-z])(?=(?:\S*[013457@$!|]){2})[^\s]+")
+_ID_LIKE: Final = re.compile(
+    r"[\w.+-]+@[\w-]+\.[\w.]+"  # e-mail
+    r"|(?=\S*\d)\w+(?:[-_/.]\w+)+"  # modelo/SKU/UUID com separador (GF-3D, FG-830)
+    r"|[a-z]{0,3}\d{4,}[a-z]{0,3}"  # rastreio, pedido, CPF (QB123456789BR)
+    r"|[0-9a-f]{8,}"  # hash, UUID sem hífen
+)
+_HYPHENATED: Final = re.compile(r"\b([a-z]{2,})-([a-z]{2,})\b")
 _SPACED_RUN: Final = re.compile(r"(?:\b[a-z]\b[\s.\-_*]+){3,}\b[a-z]\b")
 _BASE64: Final = re.compile(r"[A-Za-z0-9+/]{16,}={0,2}")
-_MAX_BASE64_TOKENS: Final = 3
+# Limites contam trechos que DECODIFICAM (não matches da regex) e o total de bytes, para que
+# trechos-isca na frente não escondam o payload; os maiores decodificados têm prioridade.
+_MAX_BASE64_DECODED: Final = 4
+_MAX_BASE64_BYTES: Final = 2048
 # Frases-assinatura procuradas no texto "espremido" (só letras), quando há letras separadas.
 _SQUASHED: Final = (
     "ignoreasregras",
@@ -77,38 +89,75 @@ def normalize(text: str) -> str:
 
 
 def _decoded_base64(text: str) -> list[str]:
-    """Trechos base64 que decodificam para texto UTF-8 imprimível (no máximo 3)."""
+    """Trechos base64 que decodificam para texto UTF-8 imprimível, maiores primeiro.
+
+    Percorre todos os candidatos (a entrada já vem limitada a ``MAX_INPUT_CHARS``), para no
+    teto de bytes decodificados e devolve no máximo ``_MAX_BASE64_DECODED`` trechos.
+    """
     found: list[str] = []
-    for token in _BASE64.findall(text)[:_MAX_BASE64_TOKENS]:
+    budget = _MAX_BASE64_BYTES
+    for token in _BASE64.findall(text):
         try:
             raw = base64.b64decode(token + "=" * (-len(token) % 4), validate=True)
             decoded = raw.decode("utf-8")
         except (binascii.Error, UnicodeDecodeError, ValueError):
             continue
-        if decoded.isprintable():
+        budget -= len(raw)
+        if budget < 0:
+            break
+        if decoded.strip() and decoded.isprintable():
             found.append(decoded)
-    return found
+    return sorted(found, key=len, reverse=True)[:_MAX_BASE64_DECODED]
 
 
-def deobfuscated_variants(text: str) -> list[str]:
-    """Versões desofuscadas da mensagem que diferem do texto normalizado.
+def _unleet(text: str) -> str:
+    def swap(match: re.Match[str]) -> str:
+        token = match.group()
+        return token if _ID_LIKE.fullmatch(token.strip(".,;:!?")) else token.translate(_LEET)
 
-    Args:
-        text: Mensagem já normalizada por :func:`normalize`.
+    return _LEETABLE.sub(swap, text)
 
-    Returns:
-        Variantes (homóglifos e leet trocados, base64 decodificado), sem repetição; vazio se
-        nada mudou. O texto original não entra na lista.
-    """
-    base = normalize_text(text)
-    folded = normalize_text(text.translate(_HOMOGLYPHS))
-    folded = _LEETABLE.sub(lambda m: m.group().translate(_LEET), folded)
-    candidates = [folded, *(normalize_text(d) for d in _decoded_base64(text))]
+
+def _dedupe(candidates: list[str], base: str) -> list[str]:
     out: list[str] = []
     for candidate in candidates:
         if candidate and candidate != base and candidate not in out:
             out.append(candidate)
     return out
+
+
+def classifier_variants(text: str) -> list[str]:
+    """Variantes que o classificador também pontua: homóglifos trocados e base64 decodificado.
+
+    Leet, hífen e letras separadas ficam de fora: reescrevem identificadores legítimos (SKU,
+    rastreio, UUID, e-mail) em texto que o embedding confunde com ataque.
+
+    Args:
+        text: Mensagem já normalizada por :func:`normalize`.
+
+    Returns:
+        Variantes diferentes do texto normalizado, sem repetição.
+    """
+    folded = normalize_text(text.translate(_HOMOGLYPHS))
+    decoded = [normalize_text(d) for d in _decoded_base64(text)]
+    return _dedupe([folded, *decoded], normalize_text(text))
+
+
+def deobfuscated_variants(text: str) -> list[str]:
+    """Versões desofuscadas da mensagem, para a heurística de padrões.
+
+    Args:
+        text: Mensagem já normalizada por :func:`normalize`.
+
+    Returns:
+        Variantes (homóglifos, leet fora de identificadores, hífen intra-palavra removido,
+        base64 decodificado), sem repetição; vazio se nada mudou. O texto original não entra.
+    """
+    folded = normalize_text(text.translate(_HOMOGLYPHS))
+    unleet = _unleet(folded)
+    joined = _HYPHENATED.sub(r"\1\2", unleet)
+    decoded = [normalize_text(d) for d in _decoded_base64(text)]
+    return _dedupe([unleet, joined, *decoded], normalize_text(text))
 
 
 def _matches(norm: str) -> bool:
